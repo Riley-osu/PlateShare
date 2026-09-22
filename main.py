@@ -7,6 +7,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI
+from Listing import listing
 
 firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
 
@@ -22,6 +23,8 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 app = FastAPI(title="Test App")
+
+testList = listing(5,'pizza', 'pizza')
 
 
 @app.get("/")

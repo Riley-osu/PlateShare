@@ -11,24 +11,6 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-doc_ref = db.collection('users').document('Firebase001')
-
-try:
-    doc_ref.update({
-  "username": "testuser123",
-  "firstName": "first",
-  "lastName": "last",
-  "role": "student",
-  "status": "active",
-  "createdAt": {
-    "_seconds": 1789084139,
-    "_nanoseconds": 0
-  },
-  "email": "test@example.com"
-})
-except Exception as e:
-    print(e)
-
 
 def edit_Database_Field(collection:str, document:str, field:str, data) -> bool:
     doc_ref = db.collection(collection).document(document)
@@ -91,6 +73,6 @@ def add_listing(foodType:str, description:str, quanity:int, location:str, organi
         print(e)
         return False
 
-def delete_listing(listingID:str):
+def remove_listing(listingID:str):
     doc_ref = db.collection('listings').document('listeningID')
     doc_ref.delete()
