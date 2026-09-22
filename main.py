@@ -7,7 +7,6 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI
-#import FirebaseToFlutter
 
 firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
 
@@ -23,8 +22,6 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 app = FastAPI(title="Test App")
-
-#FirebaseToFlutter()
 
 
 @app.get("/")
