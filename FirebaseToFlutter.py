@@ -2,7 +2,6 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import datetime
-import time
 
 cred = credentials.Certificate("firebase_admin.json")
 
@@ -11,26 +10,8 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-doc_ref = db.collection('users').document('Firebase001')
-
-try:
-    doc_ref.update({
-  "username": "testuser123",
-  "firstName": "first",
-  "lastName": "last",
-  "role": "student",
-  "status": "active",
-  "createdAt": {
-    "_seconds": 1789084139,
-    "_nanoseconds": 0
-  },
-  "email": "test@example.com"
-})
-except Exception as e:
-    print(e)
-
-
-def edit_Database_Field(collection:str, document:str, field:str, data) -> bool:
+def edit_database_field(collection:str, document:str, field:str, data) -> bool:
+    """Edit a preexisting field within the database. Returns false if it failed to do so."""
     doc_ref = db.collection(collection).document(document)
     try:
         doc_ref.update({
@@ -41,7 +22,8 @@ def edit_Database_Field(collection:str, document:str, field:str, data) -> bool:
         print(e)
         return False
 
-def add_database_User(username:str, firstName:str, lastName:str, role:str, email:str) -> bool:
+def add_database_user(username:str, firstName:str, lastName:str, role:str, email:str) -> bool:
+    """Add a new database user. Returns false if it failed to do so."""
     doc_ref = db.collection('users').document(username)
 
     try:
@@ -62,6 +44,7 @@ def add_database_User(username:str, firstName:str, lastName:str, role:str, email
         print(e)
 
 def add_listing(foodType:str, description:str, quanity:int, location:str, organizationID:int, startTime:str, endTime:str, image:str) -> bool:
+    """Add a new listing to the database with the given information. Returns false if it failed to do so."""
     doc_ref = db.collection('listings').document('listing002')
 
     try:
@@ -91,6 +74,7 @@ def add_listing(foodType:str, description:str, quanity:int, location:str, organi
         print(e)
         return False
 
-def delete_listing(listingID:str):
+def delete_listing(listingID:str) -> bool:
+    """Delete a listing from the database. Returns false if it failed to do so."""
     doc_ref = db.collection('listings').document('listeningID')
     doc_ref.delete()
