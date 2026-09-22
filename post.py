@@ -6,7 +6,7 @@ postID:int = 0;
 foodType:string = "";
 availableSlots:int = 0;
 currentReservations:int = 0;
-headPicture:string #current a string until image passing is finished
+headPicture:string #currently a string until image passing is finished
 
 
 
@@ -23,7 +23,7 @@ def Remove_Reservation(amount:int) -> bool:
         currentReservations -= amount;
         return True;
     
-    #Reservation was told to be negative
+    #currentReservation was told to be negative
     currentReservations = 0;
     return False;
 
