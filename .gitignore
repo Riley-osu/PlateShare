@@ -3,3 +3,4 @@ __pycache__/
 env/
 .vs/
 firebase_admin.json
+.vscode/

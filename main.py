@@ -7,6 +7,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI
+#import FirebaseToFlutter
 
 firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
 
@@ -22,6 +23,9 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 app = FastAPI(title="Test App")
+
+#FirebaseToFlutter()
+
 
 @app.get("/")
 def health_check():
@@ -54,6 +58,8 @@ def list_all_collections():
         collections = db.collections()
         collectionNames = [coll.id for coll in collections]
         fetchedData = []
+
+        doc = collection.stream()
 
         for col in collections:
             CollectionDict= doc.to_dict()
