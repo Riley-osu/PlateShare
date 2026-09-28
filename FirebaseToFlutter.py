@@ -2,8 +2,15 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import datetime
+from pathlib import Path
 
-cred = credentials.Certificate("firebase_admin.json")
+cred = ""
+
+if Path("firebase_admin.json").is_file():
+    cred = credentials.Certificate("firebase_admin.json")
+else:
+    cred = credentials.Certificate("/etc/secrets/firebase_admin.json")
+
 
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
