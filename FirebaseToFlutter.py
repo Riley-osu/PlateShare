@@ -43,6 +43,15 @@ def add_database_user(username:str, firstName:str, lastName:str, role:str, email
     except Exception as e:
         print(e)
 
+def delete_database_user(userName:str) -> bool:
+    """Delete a user from the database. Returns false if it failed to do so."""
+    doc_ref = db.collection('users').document(userName)
+    doc_ref.delete()
+
+    if doc_ref.get():
+        return False
+    return True
+
 def add_listing(foodType:str, description:str, quanity:int, location:str, organizationID:int, startTime:str, endTime:str, image:str) -> bool:
     """Add a new listing to the database with the given information. Returns false if it failed to do so."""
     doc_ref = db.collection('listings').document('listing002')
@@ -76,5 +85,9 @@ def add_listing(foodType:str, description:str, quanity:int, location:str, organi
 
 def delete_listing(listingID:str) -> bool:
     """Delete a listing from the database. Returns false if it failed to do so."""
-    doc_ref = db.collection('listings').document('listeningID')
+    doc_ref = db.collection('listings').document(listingID)
     doc_ref.delete()
+
+    if doc_ref.get():
+        return False
+    return True

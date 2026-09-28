@@ -1,2 +1,4 @@
 fastapi
 uvicorn[standard]
+google-cloud-firestore_v1
+firebase-admin
