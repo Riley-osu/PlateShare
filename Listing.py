@@ -1,24 +1,22 @@
 # This file creates a class for listings
-
-import string
 import FirebaseToFlutter #Uses this file to communicate between Flutter and Firebase
 
 from datetime import datetime
 
 
 class listing: 
-    postID:string = "";
     #variables for each part of a listing
+    postID:str = "";
     postID:int = 0;
-    foodType:string = "";
+    foodType:str = "";
     availableReservations:int = 0;
     currentReservations:int = 0;
-    headPicture:string = "lol not available" #currently a string until image passing is finished
-    description:string = "yum yum time"
-    location:string = "your moms house"
-    organizationID:int = 67
-    startTime:string = datetime().now.isoformat()
-    endTime:string = datetime(2026,10,20,15).isoformat()
+    headPicture:str = "" #currently a string until image passing is finished
+    description:str = ""
+    location:str = ""
+    organizationID:str = ""
+    startTime:str = datetime().now.isoformat()
+    endTime:str = datetime(2026,10,20,15).isoformat()
     
     def __init__(self, maxReservations: int, foodDescription:str, foodType:str, location:str, organizationID:int, startTime:str, endTime:str, picture:str) -> bool:
         """Add a new listing object and update the database with the given information. Returns false if it failed to update the database.
@@ -41,7 +39,7 @@ class listing:
         
     #function for adding user reservations using the current number of reservations
     def add_Reservation(self, amount: int) -> bool:
-        """Updates both the object and the database"""
+        """Updates both the object and the database. Returns false if it failed to do so"""
         
         # if currentReservation amount + new reservation is less than or equal to 
         # available reservations succesfully add reservation
@@ -52,6 +50,7 @@ class listing:
     
     # Function for removing user reservation 
     def remove_Reservation(self,amount: int) -> bool:
+        """Updates both the object and the database. Returns false if it failed to do so"""
         if self.current_Reservations - amount >= 0:
             self.current_Reservations -= amount
             return FirebaseToFlutter.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
@@ -61,6 +60,7 @@ class listing:
     
     #Function to pull remaining reservation spots
     def get_remaining_spots(self) -> int:
+        """Gets the remaining spots available in the given listing."""
         return FirebaseToFlutter.get_database_field(listing, self.postID, "quantity")
         #return self.available_Reservations - self.current_Reservations
     
