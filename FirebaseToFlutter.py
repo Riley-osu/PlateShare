@@ -17,6 +17,16 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
+
+def get_database_field(collection:str, document:str, field:str):
+    """gets a preexisting field within the database. Returns a empty string if it failed to do so"""
+    doc_ref = db.collection(collection).document(document)
+    try:
+        return doc_ref.get()
+    except Exception as e:
+        print(e)
+        return False
+
 def edit_database_field(collection:str, document:str, field:str, data) -> bool:
     """Edit a preexisting field within the database. Returns false if it failed to do so."""
     doc_ref = db.collection(collection).document(document)
@@ -60,8 +70,13 @@ def delete_database_user(userName:str) -> bool:
     return True
 
 def add_listing(foodType:str, description:str, quanity:int, location:str, organizationID:int, startTime:str, endTime:str, image:str) -> bool:
-    """Add a new listing to the database with the given information. Returns false if it failed to do so."""
-    doc_ref = db.collection('listings').document('listing002')
+    """Add a new listing to the database with the given information. Returns false if it failed to do so.
+    Pass time using the following:
+    from datatime import datetime
+    startTime = datetime(time).isoformat()"""
+
+    ListingID = str(organizationID) + location + startTime
+    doc_ref = db.collection('listings').document(ListingID)
 
     try:
         doc_ref.set({
@@ -98,3 +113,14 @@ def delete_listing(listingID:str) -> bool:
     if doc_ref.get():
         return False
     return True
+
+def edit_listing(listingID:str, field:str, data) -> bool:
+    doc_ref = db.collection('listings').document(listingID)
+    try:
+        doc_ref.update({
+            field: data
+        })
+        return True
+    except Exception as e:
+        print(e)
+        return False
