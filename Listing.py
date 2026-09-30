@@ -1,11 +1,15 @@
+# This file creates a class for listings
+
 import string
-import FirebaseToFlutter
+import FirebaseToFlutter #Uses this file to communicate between Flutter and Firebase
 
 from datetime import datetime
 
 
 class listing: 
     postID:string = "";
+    #variables for each part of a listing
+    postID:int = 0;
     foodType:string = "";
     availableReservations:int = 0;
     currentReservations:int = 0;
@@ -35,13 +39,18 @@ class listing:
         return FirebaseToFlutter.add_listing(self.foodType,self.food_description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
         
+    #function for adding user reservations using the current number of reservations
     def add_Reservation(self, amount: int) -> bool:
         """Updates both the object and the database"""
+        
+        # if currentReservation amount + new reservation is less than or equal to 
+        # available reservations succesfully add reservation
         if self.currentReservations + amount <= self.available_Reservations:
             self.currentReservations += amount
             return FirebaseToFlutter.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
         return False
     
+    # Function for removing user reservation 
     def remove_Reservation(self,amount: int) -> bool:
         if self.current_Reservations - amount >= 0:
             self.current_Reservations -= amount
@@ -50,6 +59,7 @@ class listing:
         self.current_reservations = 0
         return False
     
+    #Function to pull remaining reservation spots
     def get_remaining_spots(self) -> int:
         return FirebaseToFlutter.get_database_field(listing, self.postID, "quantity")
         #return self.available_Reservations - self.current_Reservations
