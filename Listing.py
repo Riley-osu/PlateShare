@@ -1,7 +1,7 @@
 
 
 import string
-import FirebaseToFlutter
+import firebaseToFlutter
 
 
 class listing: 
@@ -21,7 +21,7 @@ class listing:
         self.currentReservations = 0
         self.food_description = food_description
         self.picture = picture
-        FirebaseToFlutter.add_listing(self.foodType,self.food_description,self.availableReservations,self.location,
+        firebaseToFlutter.add_listing(self.foodType,self.food_description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
         
     def add_Reservation(self, amount: int) -> bool:
