@@ -1,7 +1,7 @@
 # This file creates a class for listings
 
 import string
-import FirebaseToFlutter #Uses this file to communicate between Flutter and Firebase
+import firebaseToFlutter
 
 
 class listing: 
@@ -28,9 +28,7 @@ class listing:
         
         self.food_description = food_description
         self.picture = picture
-        
-        # uses add_listing from FirebaseToFlutter 
-        FirebaseToFlutter.add_listing(self.foodType,self.food_description,self.availableReservations,self.location,
+        firebaseToFlutter.add_listing(self.foodType,self.food_description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
         
     #function for adding user reservations using the current number of reservations
