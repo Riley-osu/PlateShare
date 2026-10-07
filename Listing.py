@@ -34,7 +34,6 @@ class listing:
 
         firebaseToFlutter.add_listing(self.foodType,self.description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
-        print("Uploaded picture")
         
     #function for adding user reservations using the current number of reservations
     def add_Reservation(self, amount: int) -> bool:
