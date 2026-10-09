@@ -7,7 +7,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI
-from Listing import listing
+import firebaseToFlutter
 
 firebase_creds_env = os.getenv("FIREBASE_CREDENTIALS")
 
@@ -24,8 +24,15 @@ db = firestore.client()
 
 app = FastAPI(title="Test App")
 
-testList = listing(5,'pizza', 'pizza')
 
+#from imageHandling import imageHandler
+#from listing import listing
+#picture = imageHandler.load_image(r"C:\Users\rcros\source\repos\Software Engineering\Screenshot 2025-08-13 211504.png")
+
+#post = listing(5, "testD", "testT", "here", 52, "timeStart", "timeEnd", picture)
+
+#imageHandler.load_image(firebaseToFlutter.get_database_field("listings", "52heretimeStart", "img")).show()
+#firebaseToFlutter.get_image(firebaseToFlutter.generate_ListingID(52, "here", "timeStart"))
 
 @app.get("/")
 def health_check():

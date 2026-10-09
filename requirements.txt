@@ -2,4 +2,5 @@ fastapi
 uvicorn[standard]
 google-cloud-firestore
 firebase-admin
+pillow
 ollama
