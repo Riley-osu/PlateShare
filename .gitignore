@@ -4,3 +4,4 @@ env/
 .vs/
 firebase_admin.json
 .vscode/
+.env
