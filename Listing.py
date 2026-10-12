@@ -32,8 +32,10 @@ class listing:
         self.endTime = endTime
         self.postID = str(organizationID) + location + startTime
 
-        firebaseToFlutter.add_listing(self.foodType,self.description,self.availableReservations,self.location,
+        returnCode = firebaseToFlutter.add_listing(self.foodType,self.description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
+        if returnCode["status"] != 200:
+            raise RuntimeError(returnCode)
         
     #function for adding user reservations using the current number of reservations
     def add_Reservation(self, amount: int) -> bool:
