@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'main_dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -136,7 +137,6 @@ class LandingScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
-                    // Navigate to auth screen in login mode
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -162,7 +162,6 @@ class LandingScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
-                    // Navigate to auth screen in signup mode
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -192,7 +191,6 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  // Text controllers
   var e1 = TextEditingController();
   var p1 = TextEditingController();
   var o1 = TextEditingController();
@@ -209,12 +207,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String pageTitle = "";
-    if (isSignUpPage == true) {
-      pageTitle = "Sign Up";
-    } else {
-      pageTitle = "Log In";
-    }
+    String pageTitle = isSignUpPage == true ? "Sign Up" : "Log In";
 
     return Scaffold(
       appBar: AppBar(title: Text(pageTitle)),
@@ -307,7 +300,6 @@ class _AuthScreenState extends State<AuthScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
                   onPressed: () {
-                    // Close keyboard
                     FocusScope.of(context).unfocus();
 
                     if (myFormKey.currentState!.validate()) {
@@ -315,7 +307,6 @@ class _AuthScreenState extends State<AuthScreen> {
                       String userPass = p1.text;
 
                       if (isSignUpPage == true) {
-                        // Create user object
                         var tempUser = UserData(
                           email: userEmail,
                           password: userPass,
@@ -325,7 +316,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         );
                         registeredUsersList.add(tempUser);
 
-                        // Navigate to Dashboard
                         bool checkAdmin = tempUser.email.startsWith('admin');
                         Navigator.pushAndRemoveUntil(
                           context,
@@ -338,7 +328,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           (route) => false,
                         );
                       } else {
-                        // Check if user exists
                         int foundIndex = -1;
                         for (int i = 0; i < registeredUsersList.length; i++) {
                           if (registeredUsersList[i].email == userEmail &&
@@ -349,7 +338,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         }
 
                         if (foundIndex == -1) {
-                          // Show popup
                           showDialog(
                             context: context,
                             builder: (ctx) => AlertDialog(
@@ -359,9 +347,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(ctx);
-                                  },
+                                  onPressed: () => Navigator.pop(ctx),
                                   child: const Text("Cancel"),
                                 ),
                                 ElevatedButton(
@@ -402,574 +388,6 @@ class _AuthScreenState extends State<AuthScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// MAIN DASHBOARD SCREEN
-class MainDashboard extends StatefulWidget {
-  final UserData currentUser;
-  final bool initialIsAdmin;
-
-  const MainDashboard({
-    super.key,
-    required this.currentUser,
-    this.initialIsAdmin = false,
-  });
-
-  @override
-  State<MainDashboard> createState() => _MainDashboardState();
-}
-
-class _MainDashboardState extends State<MainDashboard> {
-  int _selectedIndex = 0;
-  bool adminFlag = false;
-  TextEditingController searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    adminFlag = widget.initialIsAdmin;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Dynamic title string
-    String titleText = "Dashboard";
-    if (_selectedIndex == 0) titleText = "Food List View";
-    if (_selectedIndex == 1) titleText = "Map View";
-    if (_selectedIndex == 2) titleText = "Create Post";
-    if (_selectedIndex == 3) titleText = "Account Settings";
-    if (_selectedIndex == 4) titleText = "Admin Portal";
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(titleText),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: "Logout",
-            onPressed: () {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LandingScreen()),
-                (route) => false,
-              );
-            },
-          )
-        ],
-      ),
-      body: Builder(
-        builder: (context) {
-          // Tab 0: List View
-          if (_selectedIndex == 0) {
-            if (globalPostsList.isEmpty) {
-              return const Center(
-                child: Text(
-                  "No food posts available yet.\nOrganizations can create posts in the Post tab.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: globalPostsList.length,
-              itemBuilder: (context, index) {
-                var post = globalPostsList[index];
-                bool isDepleted = post.remainingSlots <= 0;
-
-                DecorationImage? bgImage;
-                if (post.imageFile != null) {
-                  bgImage = DecorationImage(
-                    image: FileImage(post.imageFile!),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withValues(alpha: 0.60),
-                      BlendMode.darken,
-                    ),
-                  );
-                } else if (post.imageUrl != null && post.imageUrl!.isNotEmpty) {
-                  bgImage = DecorationImage(
-                    image: NetworkImage(post.imageUrl!),
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(
-                      Colors.black.withValues(alpha: 0.60),
-                      BlendMode.darken,
-                    ),
-                  );
-                }
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 20),
-                  clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  elevation: 4,
-                  child: Container(
-                    height: 260,
-                    decoration: BoxDecoration(
-                      color: bgImage == null ? Colors.grey.shade900 : null,
-                      image: bgImage,
-                    ),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                "${post.orgName} - ${post.foodType}",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today, color: Colors.orange, size: 16),
-                            const SizedBox(width: 5),
-                            Text(
-                              "${post.date.month}/${post.date.day}/${post.date.year}",
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
-                            ),
-                            const SizedBox(width: 15),
-                            const Icon(Icons.access_time, color: Colors.orange, size: 16),
-                            const SizedBox(width: 5),
-                            Text(
-                              "${post.startTime.format(context)} - ${post.endTime.format(context)}",
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: Text(
-                            post.description,
-                            style: const TextStyle(color: Colors.white, fontSize: 14),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  isDepleted
-                                      ? "FULL / NO SLOTS LEFT"
-                                      : "Slots Left: ${post.remainingSlots}",
-                                  style: TextStyle(
-                                    color: isDepleted ? Colors.redAccent : Colors.lightGreenAccent,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDepleted ? Colors.grey : Colors.orange,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: isDepleted
-                                  ? null
-                                  : () {
-                                      setState(() {
-                                        if (post.remainingSlots > 0) {
-                                          post.remainingSlots--;
-                                        }
-                                      });
-                                    },
-                              icon: const Icon(Icons.bookmark_add),
-                              label: Text(isDepleted ? "Claimed" : "Reserve Slot"),
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          }
-
-          // Tab 1: Map View
-          if (_selectedIndex == 1) {
-            return const Center(
-              child: Text("Map Page", style: TextStyle(fontSize: 24)),
-            );
-          }
-
-          // Tab 2: Create Post
-          if (_selectedIndex == 2) {
-            if (!widget.currentUser.isOrganization ||
-                widget.currentUser.orgName == null ||
-                widget.currentUser.orgName!.isEmpty) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.block, size: 70, color: Colors.red),
-                      SizedBox(height: 15),
-                      Text(
-                        "Posting Access Restricted",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      Text(
-                        "You must be signed in as an Organization with a valid Organization Name to create posts.",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            return _CreatePostForm(
-              orgName: widget.currentUser.orgName!,
-              onPostCreated: (newPost) {
-                setState(() {
-                  globalPostsList.add(newPost);
-                  _selectedIndex = 0; // Go back to list
-                });
-              },
-            );
-          }
-
-          // Tab 3: Account Page
-          if (_selectedIndex == 3) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.account_circle, size: 80, color: Colors.grey),
-                  const SizedBox(height: 10),
-                  const Text("Account Page",
-                      style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  Text("Logged in as:\n${widget.currentUser.email}",
-                      textAlign: TextAlign.center),
-                  if (widget.currentUser.isOrganization)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Chip(
-                        label: Text("Org: ${widget.currentUser.orgName ?? 'Unspecified'}"),
-                        avatar: const Icon(Icons.business, size: 18),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          }
-
-          // Tab 4: Admin Portal
-          if (_selectedIndex == 4) {
-            List<UserData> unapprovedOrgs = [];
-            for (var u in registeredUsersList) {
-              if (u.isOrganization && !u.isApprovedOrg) {
-                unapprovedOrgs.add(u);
-              }
-            }
-
-            String searchQuery = searchController.text.toLowerCase();
-            List<UserData> filteredMembers = [];
-            for (var u in registeredUsersList) {
-              if (u.email.toLowerCase().contains(searchQuery)) {
-                filteredMembers.add(u);
-              }
-            }
-
-            return Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    color: Colors.grey.shade100,
-                    child: SwitchListTile(
-                      title: const Text(
-                        "Admin Access Credentials",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Text(adminFlag
-                          ? "Status: Granted (Access Enabled)"
-                          : "Status: Restricted (Access Disabled)"),
-                      value: adminFlag,
-                      onChanged: (bool value) {
-                        setState(() {
-                          adminFlag = value;
-                        });
-                      },
-                    ),
-                  ),
-                  const Divider(height: 30),
-                  Expanded(
-                    child: adminFlag
-                        ? DefaultTabController(
-                            length: 2,
-                            child: Column(
-                              children: [
-                                const TabBar(
-                                  tabs: [
-                                    Tab(
-                                      icon: Icon(Icons.how_to_reg),
-                                      text: "Approve Orgs",
-                                    ),
-                                    Tab(
-                                      icon: Icon(Icons.people),
-                                      text: "Member List",
-                                    ),
-                                  ],
-                                ),
-                                Expanded(
-                                  child: TabBarView(
-                                    children: [
-                                      // Tab 1: Approve Orgs
-                                      unapprovedOrgs.isEmpty
-                                          ? const Center(
-                                              child: Text("No organizations pending approval."))
-                                          : ListView.builder(
-                                              itemCount: unapprovedOrgs.length,
-                                              itemBuilder: (context, index) {
-                                                var orgUser = unapprovedOrgs[index];
-                                                return Card(
-                                                  margin: const EdgeInsets.symmetric(vertical: 8),
-                                                  child: ListTile(
-                                                    leading: const Icon(Icons.business, color: Colors.orange),
-                                                    title: Text(orgUser.orgName ?? "Unknown Org"),
-                                                    subtitle: Text(orgUser.email),
-                                                    trailing: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        IconButton(
-                                                          icon: const Icon(Icons.check_circle, color: Colors.green),
-                                                          onPressed: () {
-                                                            setState(() {
-                                                              orgUser.isApprovedOrg = true;
-                                                            });
-                                                          },
-                                                        ),
-                                                        IconButton(
-                                                          icon: const Icon(Icons.cancel, color: Colors.red),
-                                                          onPressed: () {
-                                                            setState(() {
-                                                              registeredUsersList.remove(orgUser);
-                                                            });
-                                                          },
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-
-                                      // Tab 2: Member List
-                                      Column(
-                                        children: [
-                                          const SizedBox(height: 10),
-                                          TextField(
-                                            controller: searchController,
-                                            decoration: const InputDecoration(
-                                              labelText: "Search Members",
-                                              prefixIcon: Icon(Icons.search),
-                                              border: OutlineInputBorder(),
-                                            ),
-                                            onChanged: (val) {
-                                              setState(() {});
-                                            },
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Expanded(
-                                            child: ListView.builder(
-                                              itemCount: filteredMembers.length,
-                                              itemBuilder: (context, index) {
-                                                var member = filteredMembers[index];
-                                                return ListTile(
-                                                  leading: Icon(
-                                                    member.isOrganization ? Icons.business : Icons.person,
-                                                    color: member.isOrganization ? Colors.orange : Colors.blue,
-                                                  ),
-                                                  title: Text(member.email),
-                                                  subtitle: Text(
-                                                    member.isOrganization
-                                                        ? "Organization: ${member.orgName ?? 'N/A'}"
-                                                        : "Student/Member",
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.lock, size: 70, color: Colors.red.shade400),
-                                const SizedBox(height: 15),
-                                const Text(
-                                  "Access Denied",
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  "You do not have the required admin credentials to view this page.",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Container(); // fallback
-        },
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        selectedItemColor: Colors.orange.shade800,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: "List"),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
-          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: "Post"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Account"),
-          BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: "Admin"),
-        ],
-      ),
-    );
-  }
-}
-
-// CREATE POST FORM WIDGET
-class _CreatePostForm extends StatefulWidget {
-  final String orgName;
-  final Function(FoodPost) onPostCreated;
-
-  const _CreatePostForm({
-    required this.orgName,
-    required this.onPostCreated,
-  });
-
-  @override
-  State<_CreatePostForm> createState() => _CreatePostFormState();
-}
-
-class _CreatePostFormState extends State<_CreatePostForm> {
-  var foodTypeController = TextEditingController();
-  var descController = TextEditingController();
-  var slotsController = TextEditingController();
-
-  DateTime selectedDate = DateTime.now();
-  TimeOfDay startTime = const TimeOfDay(hour: 12, minute: 0);
-  TimeOfDay endTime = const TimeOfDay(hour: 13, minute: 0);
-  File? pickedImage;
-
-  var postFormKey = GlobalKey<FormState>();
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: postFormKey,
-        child: Column(
-          children: [
-            TextFormField(
-              controller: foodTypeController,
-              decoration: const InputDecoration(
-                labelText: "Food Type",
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => v == null || v.isEmpty ? "Required" : null,
-            ),
-            const SizedBox(height: 15),
-            TextFormField(
-              controller: descController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: "Description",
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => v == null || v.isEmpty ? "Required" : null,
-            ),
-            const SizedBox(height: 15),
-            TextFormField(
-              controller: slotsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Available Slots",
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return "Required";
-                if (int.tryParse(v) == null) return "Enter a valid number";
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // Submit logic
-                if (postFormKey.currentState!.validate()) {
-                  var newPost = FoodPost(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    orgName: widget.orgName,
-                    foodType: foodTypeController.text,
-                    description: descController.text,
-                    imageFile: pickedImage,
-                    date: selectedDate,
-                    startTime: startTime,
-                    endTime: endTime,
-                    remainingSlots: int.parse(slotsController.text),
-                  );
-                  widget.onPostCreated(newPost);
-                }
-              },
-              child: const Text("Publish Post"),
-            ),
-          ],
         ),
       ),
     );

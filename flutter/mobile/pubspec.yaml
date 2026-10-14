@@ -37,6 +37,7 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_auth: ^6.7.0
   cloud_firestore: ^6.10.0
+  image_picker: ^1.1.2 # <-- Added for image selection functionality
 
 dev_dependencies:
   flutter_test:
@@ -88,5 +89,5 @@ flutter:
   #       - asset: fonts/TrajanPro_Bold.ttf
   #         weight: 700
   #
-  # For details regarding fonts from package dependencies,
+  # For detailsoger regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
