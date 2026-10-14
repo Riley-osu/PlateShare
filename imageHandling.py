@@ -1,6 +1,7 @@
 from PIL import Image, ImageOps
 import io
 
+#to see the image at runtime use the load_image function and then use .show()
 class imageHandler:
     def load_image(filePathOrBytes):
         """Loads an image and fixes rotation issues, accepts file path or raw bytes"""
