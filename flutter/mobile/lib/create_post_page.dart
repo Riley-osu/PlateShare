@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,6 +31,161 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   var postFormKey = GlobalKey<FormState>();
 
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
+
+  bool isPublishing = false;
+
+  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  // NEW: Save the food listing to Firestore
+  Future<String> _savePostToFirebase({
+    required String foodName,
+    required String description,
+    required int quantity,
+    required DateTime pickupStart,
+    required DateTime pickupEnd,
+  }) async {
+    final user = firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw Exception('You must be logged in to create a post.');
+    }
+
+    // Find the organization belonging to this user.
+    final orgQuery = await firestore
+        .collection('organizations')
+        .where('ownerID', isEqualTo: user.uid)
+        .limit(1)
+        .get();
+
+    if (orgQuery.docs.isEmpty) {
+      throw Exception('Organization not found in Firebase.');
+    }
+
+    final organization = orgQuery.docs.first;
+    final orgData = organization.data();
+
+    // Only approved organizations can publish food posts.
+    if (orgData['status'] != 'active') {
+      throw Exception(
+        'Your organization must be approved before posting.',
+      );
+    }
+
+    // Use the organization's saved address if available, if not leave it empty.
+    final location =
+        (orgData['address'] ?? '').toString();
+
+    // Firestore stores the image URL
+    const String imageURL = '';
+
+    final document = await firestore
+        .collection('listings')
+        .add({
+      'createdAt': FieldValue.serverTimestamp(),
+      'description': description,
+      'foodName': foodName,
+      'imageURL': imageURL,
+      'location': location,
+      'organizationID': organization.id,
+      'pickupEnd': Timestamp.fromDate(pickupEnd),
+      'pickupStart': Timestamp.fromDate(pickupStart),
+      'quantity': quantity,
+      'status': 'available',
+    });
+
+    // Return the real Firestore document ID.
+    return document.id;
+  }
+
+  // Publish to Firebase and update the existing local list
+  Future<void> _publishPost() async {
+    if (isPublishing) return;
+
+    if (!postFormKey.currentState!.validate()) {
+      return;
+    }
+
+    final quantity = int.parse(slotsController.text);
+
+    if (quantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Available Slots must be greater than zero.'),
+        ),
+      );
+      return;
+    }
+
+    final pickupStart =
+        _combineDateAndTime(selectedDate, startTime);
+
+    final pickupEnd =
+        _combineDateAndTime(selectedDate, endTime);
+
+    if (!pickupEnd.isAfter(pickupStart)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('End time must be after start time.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isPublishing = true;
+    });
+
+    try {
+      final postID = await _savePostToFirebase(
+        foodName: foodTypeController.text.trim(),
+        description: descController.text.trim(),
+        quantity: quantity,
+        pickupStart: pickupStart,
+        pickupEnd: pickupEnd,
+      );
+
+      if (!mounted) return;
+
+      // Keep your original FoodPost functionality.
+      var newPost = FoodPost(
+        id: postID,
+        orgName: widget.currentUser.orgName!,
+        foodType: foodTypeController.text,
+        description: descController.text,
+        imageFile: pickedImage,
+        date: selectedDate,
+        startTime: startTime,
+        endTime: endTime,
+        remainingSlots: quantity,
+      );
+
+      widget.onPostCreated(newPost);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to publish post: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isPublishing = false;
+        });
+      }
+    }
+  }
   // Function to pick an image from gallery
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -79,6 +236,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
         endTime = picked;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    foodTypeController.dispose();
+    descController.dispose();
+    slotsController.dispose();
+    super.dispose();
   }
 
   @override
@@ -243,26 +408,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
             // --- PUBLISH BUTTON ---
             ElevatedButton(
-              onPressed: () {
-                if (postFormKey.currentState!.validate()) {
-                  var newPost = FoodPost(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    orgName: widget.currentUser.orgName!,
-                    foodType: foodTypeController.text,
-                    description: descController.text,
-                    imageFile: pickedImage,
-                    date: selectedDate,
-                    startTime: startTime,
-                    endTime: endTime,
-                    remainingSlots: int.parse(slotsController.text),
-                  );
-                  widget.onPostCreated(newPost);
-                }
-              },
+              onPressed: isPublishing ? null : _publishPost,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              child: const Text("Publish Post", style: TextStyle(fontSize: 16)),
+             child: const Text(
+               "Publish Post",
+               style: TextStyle(fontSize: 16),
+              ),
             ),
           ],
         ),
