@@ -17,8 +17,9 @@ class AccountPage extends StatelessWidget {
           const Text("Account Page",
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          Text("Logged in as:\n${currentUser.email}",
-              textAlign: TextAlign.center),
+
+          Text('Role: ${currentUser.role}'),
+
           if (currentUser.isOrganization)
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
@@ -27,6 +28,16 @@ class AccountPage extends StatelessWidget {
                 avatar: const Icon(Icons.business, size: 18),
               ),
             ),
+          if (currentUser.isOrganization)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Organization Status: '
+              '${currentUser.organizationStatus ?? 'Unspecified'}',
+              style: TextStyle(color: currentUser.isApprovedOrg ? Colors.green : Colors.orange,
+              ),
+            ),
+          ),  
         ],
       ),
     );

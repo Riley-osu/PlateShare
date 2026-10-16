@@ -1,44 +1,29 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import 'firebase_options.dart';
+import 'auth_service.dart';
+import 'user_data.dart';
 import 'main_dashboard.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+export 'user_data.dart';
 
-// Global list for database simulation
-List<UserData> registeredUsersList = [
-  UserData(
-    email: 'admin@okstate.edu',
-    password: 'password123',
-    isOrganization: true,
-    orgName: 'OSU Dining',
-    isApprovedOrg: true,
-  ),
-  UserData(
-    email: 'student@okstate.edu',
-    password: 'password123',
-    isOrganization: false,
-  ),
-];
+List<UserData> registeredUsersList = [];
 
-// Global posts array
 List<FoodPost> globalPostsList = [];
 
-class UserData {
-  String email;
-  String password;
-  bool isOrganization;
-  String? orgName;
-  bool isApprovedOrg;
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  UserData({
-    required this.email,
-    required this.password,
-    this.isOrganization = false,
-    this.orgName,
-    this.isApprovedOrg = false,
-  });
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+
+  );
+
+  runApp(const MyApp());
 }
 
 class FoodPost {
@@ -67,6 +52,7 @@ class FoodPost {
   });
 }
 
+// Main Application
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -102,6 +88,7 @@ class LandingScreen extends StatelessWidget {
             end: Alignment.bottomCenter,
           ),
         ),
+
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
@@ -117,13 +104,16 @@ class LandingScreen extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
+
               const SizedBox(height: 10),
               const Text(
                 "Please Log In or Sign Up using your @okstate.edu email to continue.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
+
               const SizedBox(height: 50),
+
               // Login Button Container
               SizedBox(
                 width: double.infinity,
@@ -191,13 +181,15 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  var e1 = TextEditingController();
-  var p1 = TextEditingController();
-  var o1 = TextEditingController();
+  final e1 = TextEditingController();
+  final p1 = TextEditingController();
+  final o1 = TextEditingController();
 
   bool isOrgSwitch = false;
   bool isSignUpPage = false;
-  var myFormKey = GlobalKey<FormState>();
+  bool isLoading = false;
+
+  final myFormKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -206,8 +198,99 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   @override
+  void dispose() {
+    e1.dispose();
+    p1.dispose();
+    o1.dispose();
+    super.dispose();
+  }
+  
+  Future<void> handleAuthentication() async {
+    FocusScope.of(context).unfocus();
+
+    if (!myFormKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    final userEmail = e1.text.trim().toLowerCase();
+    final userPass = p1.text;
+
+    try {
+      if (isSignUpPage) {
+        await authService.value.createAccount(email: userEmail, password: userPass, isOrganization: isOrgSwitch, orgName: isOrgSwitch ? o1.text.trim() : null);
+      } else {
+        await authService.value.signIn(email: userEmail, password: userPass);
+
+      }
+
+      final loggedUser = await authService.value.getUserData();
+
+      if (loggedUser == null) {
+        throw Exception("User data not found after authentication.");
+      }
+      if (loggedUser.status != 'active') {
+        await authService.value.signOut();
+
+        throw Exception("Your account is not active.");
+      }
+
+      if (!mounted) return;
+
+      // Open Dashboard
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+        builder: (context) => MainDashboard(
+          currentUser: loggedUser, initialIsAdmin: loggedUser.isAdmin,
+          ),
+      ),
+        (route) => false,
+      );
+  
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String message = "Authentication failed";
+
+      if (e.code == 'email-already-in-use') {
+        message = "This email is already in use.";
+      } else if (e.code == 'weak-password') {
+        message = "Password is too weak.";   
+      } else if (e.code == 'invalid-email') {
+        message = "Invalid email address.";
+      } else if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found') {
+        message = "Incorrect email or password.";
+      } else if (e.code == 'network-request-failed') {
+        message = "Network error. Please check your internet connection.";
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"),
+        ),
+      );
+
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } 
+  }
+
+  @override
   Widget build(BuildContext context) {
-    String pageTitle = isSignUpPage == true ? "Sign Up" : "Log In";
+    final pageTitle = isSignUpPage == true? "Sign Up" : "Log In";
 
     return Scaffold(
       appBar: AppBar(title: Text(pageTitle)),
@@ -227,6 +310,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 30),
+
+                // Email Input Field
                 TextFormField(
                   controller: e1,
                   keyboardType: TextInputType.emailAddress,
@@ -247,6 +332,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   },
                 ),
                 const SizedBox(height: 20),
+
+                // Password Input Field
                 TextFormField(
                   controller: p1,
                   obscureText: true,
@@ -259,24 +346,27 @@ class _AuthScreenState extends State<AuthScreen> {
                     if (value == null || value.isEmpty) {
                       return "Please enter a password";
                     }
-                    if (value.length < 6) {
+                    if (isSignUpPage && value.length < 6) {
                       return "Password must be at least 6 characters";
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
-                SwitchListTile(
-                  title: const Text("Sign in as Organization"),
-                  subtitle: const Text("Required if you plan to post items"),
-                  value: isOrgSwitch,
-                  onChanged: (bool val) {
-                    setState(() {
-                      isOrgSwitch = val;
+
+                // Organization Sign-in
+                if (isSignUpPage) ...[// 
+                  SwitchListTile(
+                    title: const Text("Sign in as Organization"),
+                    subtitle: const Text("Required if you plan to post items"),
+                    value: isOrgSwitch,
+                    onChanged: (value) {
+                      setState(() {
+                      isOrgSwitch = value;
                     });
                   },
                 ),
-                if (isOrgSwitch == true) ...[
+                if (isOrgSwitch) ...[
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: o1,
@@ -294,98 +384,22 @@ class _AuthScreenState extends State<AuthScreen> {
                     },
                   ),
                 ],
+              ],  
                 const SizedBox(height: 30),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () {
-                    FocusScope.of(context).unfocus();
-
-                    if (myFormKey.currentState!.validate()) {
-                      String userEmail = e1.text.trim().toLowerCase();
-                      String userPass = p1.text;
-
-                      if (isSignUpPage == true) {
-                        var tempUser = UserData(
-                          email: userEmail,
-                          password: userPass,
-                          isOrganization: isOrgSwitch,
-                          orgName: isOrgSwitch ? o1.text.trim() : null,
-                          isApprovedOrg: false,
-                        );
-                        registeredUsersList.add(tempUser);
-
-                        bool checkAdmin = tempUser.email.startsWith('admin');
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MainDashboard(
-                              currentUser: tempUser,
-                              initialIsAdmin: checkAdmin,
-                            ),
-                          ),
-                          (route) => false,
-                        );
-                      } else {
-                        int foundIndex = -1;
-                        for (int i = 0; i < registeredUsersList.length; i++) {
-                          if (registeredUsersList[i].email == userEmail &&
-                              registeredUsersList[i].password == userPass) {
-                            foundIndex = i;
-                            break;
-                          }
-                        }
-
-                        if (foundIndex == -1) {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text("Account Not Found"),
-                              content: const Text(
-                                "We couldn't find an account matching these credentials. Would you like to sign up instead?",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text("Cancel"),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.pop(ctx);
-                                    setState(() {
-                                      isSignUpPage = true;
-                                    });
-                                  },
-                                  child: const Text("Sign Up"),
-                                ),
-                              ],
-                            ),
-                          );
-                        } else {
-                          var loggedUser = registeredUsersList[foundIndex];
-                          if (isOrgSwitch) {
-                            loggedUser.isOrganization = true;
-                            loggedUser.orgName = o1.text.trim();
-                          }
-                          bool checkAdmin = loggedUser.email.startsWith('admin');
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => MainDashboard(
-                                currentUser: loggedUser,
-                                initialIsAdmin: checkAdmin,
-                              ),
-                            ),
-                            (route) => false,
-                          );
-                        }
-                      }
-                    }
-                  },
-                  child: Text(pageTitle, style: const TextStyle(fontSize: 18)),
+                  onPressed: isLoading ? null : handleAuthentication,
+                  child: isLoading
+                      ? const CircularProgressIndicator()
+                      : Text(
+                          pageTitle,
+                          style: const TextStyle(fontSize: 18),
+                        ),
                 ),
-              ],
+              
+              ]
             ),
           ),
         ),
