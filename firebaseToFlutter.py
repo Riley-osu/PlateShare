@@ -1,225 +1,221 @@
 import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import firestore
-import datetime
+from firebase_admin import credentials, firestore
+from datetime import datetime, timezone
 from pathlib import Path
-from imageHandling import imageHandler
-import base64
-import io
+from dataclasses import dataclass
+import math
 
-cred = ""
-db = None
+def init_firestore():
+    if not firebase_admin._apps:
+        for path in ("firebase_admin.json", "/etc/secrets/firebase_admin.json"):
+            if Path(path).is_file():
+                firebase_admin.initialize_app(credentials.Certificate(path))
+                break
+        else:
+            try:
+                firebase_admin.initialize_app()
+            except Exception:
+                return None
+    return firestore.client()
 
-if Path("firebase_admin.json").is_file():
-    cred = credentials.Certificate("firebase_admin.json")
-else:
-    if Path("/etc/secrets/firebase_admin.json").is_file():
-        cred = credentials.Certificate("/etc/secrets/firebase_admin.json")
+db = init_firestore() 
 
-if cred != None:
-    if not firebase_admin._apps and cred != "":
-        firebase_admin.initialize_app(cred)
-    else:
-        firebase_admin.initialize_app()
+def _response(status: int, message) -> dict:
+    return {"status": status, "message":message}
 
-    db = firestore.client()
+UNAUTHORIZED = _response(401, "unauthorized")
 
-
-def get_database_field(collection:str, document:str, field:str):
+def get_database_field(collection:str, document:str, field:str) -> dict:
     """gets a preexisting field within the database. Returns a empty string if it failed to do so"""
     httpsReturn = {"status": 200, "message": "OK"}
-    if db != None:
-        doc_ref = db.collection(collection).document(document).get()
-        try:
-            doc_data = doc_ref.to_dict()
-            httpsReturn = {"status": 200, "message": doc_data[field]}
-            return httpsReturn
-        except Exception as e:
-            httpsReturn = {"status": 400, "message": str(e)}
-            return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        docData = db.collection(collection).document(document).get().to_dict()
+        return _response(200, docData[field])
+    except Exception as e:
+        return _response(400, str(e))
 
-def edit_database_field(collection:str, document:str, field:str, data) -> list[str]:
+def edit_database_field(collection:str, document:str, field:str, data) -> dict:
     """Edit a preexisting field within the database. Returns https code"""
-    httpsReturn = {"status": 200, "message": "OK"}
-    if db != None:
-        doc_ref = db.collection(collection).document(document)
-        try:
-            doc_ref.update({
-                field: data
-            })
-            return httpsReturn
-        except Exception as e:
-            httpsReturn = {"status": 400, "message":str(e)}
-            return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection(collection).document(document).update({field: data})
+        return _response(200,"OK")
+    except Exception as e:
+            return _response(400, str(e))
 
-def add_database_user(username:str, firstName:str, lastName:str, role:str, email:str) -> bool:
-    """Add a new database user. Returns false if it failed to do so."""
-    httpsReturn = {"status": 200, "message": "OK"}
-    if db != None:
-        doc_ref = db.collection('users').document(username)
+def add_database_user(username:str, firstName:str, lastName:str, role:str, email:str) -> dict:
+    """Add a new database user."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection("users").document(username).set({
+            "username": username,
+            "email": email,
+            "firstName": firstName,
+            "lastName": lastName,
+            "role": role,
+            "status": "active",
+            "createdAt": firestore.SERVER_TIMESTAMP
+        })
+        return _response(201, "Created")
+    except Exception as e:
+            return _response(400, str(e))
 
-        try:
-            doc_ref.set({
-                "username": username,
-                "email": email,
-                "firstName": firstName,
-                "lastName": lastName,
-                "role": role,
-                "status": "active",
-                "createdAt": {
-                    "Date": datetime,
-                    "_seconds": datetime.now
-                }
-            })
-            httpsReturn = {"status":201, "message": "Created"}
-            return httpsReturn
-        except Exception as e:
-            httpsReturn = {"status":400, "message": str(e)}
-            httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
+def delete_database_user(userName:str) -> dict:
+    """Delete a user from the database."""    
+    if db is None:
+        return UNAUTHORIZED
+    docRef = db.collection("users").document(userName)
+    docRef.delete()
+    if docRef.get().exists:
+        return _response(409, "Conflict")
+    return _response(204, "No Content")
 
-def delete_database_user(userName:str) -> bool:
-    """Delete a user from the database. Returns false if it failed to do so."""
-    httpsReturn = {"status": 200, "message": "OK"}
-    
-    if db != None:
-        doc_ref = db.collection('users').document(userName)
-        doc_ref.delete()
-
-        if doc_ref.get():
-            httpsReturn = {"status": 409, "message": "Confict"}
-            return httpsReturn
-        
-        httpsReturn = {"status": 204, "message": "No Content"}
-        return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def add_listing(foodType:str, description:str, quanity:int, location:str, organizationID:int, startTime:str, endTime:str, image) -> bool:
-    """Add a new listing to the database with the given information. Returns false if it failed to do so.
-    Pass time using the following:
-    from datatime import datetime
-    startTime = datetime(time).isoformat()"""
-    
-    httpsReturn = {"status": 200, "message": "OK"}
-    if db != None:
-        ListingID = generate_ListingID(organizationID, location, startTime)
-        doc_ref = db.collection('listings').document(ListingID)
-
-        try:
-            doc_ref.set({
-                "foodName": foodType,
-                "description": description,
-                "quantity": quanity,
-                "location": location,
-                "pickupStart": {
-                    "Date": startTime,
-                    "_seconds": startTime
-                },
-                "pickupEnd": {
-                    "Date": endTime,
-                    "_seconds": endTime
-                },
-                "imageURL": "",
-                "status": "available",
-                "createdAt": {
-                    "Date": startTime,
-                    "_seconds": startTime
-                },
-                "organizationID": organizationID
-            })
-            return store_image(ListingID, image)
-        except Exception as e:
-            httpsReturn = {"status":400, "message": str(e)}
-            return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def delete_listing(listingID:str) -> bool:
-    """Delete a listing from the database. Returns false if it failed to do so."""
-    httpsReturn = {"status":200, "message": "OK"}
-
-    if db != None:
-        doc_ref = db.collection('listings').document(listingID)
-        doc_ref.delete()
-
-        if doc_ref.get():
-            httpsReturn = {"status":409, "message": "Conflict"}
-            return httpsReturn
-        httpsReturn = {"status":204, "message": "No Content"}
-        return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def edit_listing(listingID:str, field:str, data) -> bool:
-    """Add a listing to the database. Returns false if it failed to do so"""
-    httpsReturn = {"status":200, "message": "OK"}
-
-    if db != None:
-        doc_ref = db.collection('listings').document(listingID)
-        try:
-            doc_ref.update({
-                field: data
-            })
-            return httpsReturn
-        except Exception as e:
-            httpsReturn = {"status":400, "message": str(e)}
-        return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def store_image(listingID:str, img) -> bool:
-    """Stores an image to the given listing. Created for interal use only"""
-    httpsReturn = {"status": 200, "message": "OK"}
-
-    if db != None:
-        rawBytes = imageHandler.get_image_bytes(img, format="JPEG")
-
-        base64Encoded = base64.b64encode(rawBytes).decode('utf-8')
-
-        httpsReturn = {"status": 200, "message": edit_database_field("listings", listingID, "imageURL", base64Encoded)}
-        return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def get_image(listingID:str):
-    """Returns an image from the database."""
-    httpsReturn = {"status": 200, "message": "OK"}
-
-    if db != None:
-        base64String = get_database_field("listings", listingID, "imageURL")
-
-        if base64String["status"] != 200: #Makes sure get_database_field returned correctly.
-            return base64String
-        base64String = base64String[1]
-
-        base64String = base64String.to_dict()["imageURL"]
-
-
-        rawBytes = base64.b64decode(base64String)
-        byteStream = io.BytesIO(rawBytes)
-        image = imageHandler.load_image(byteStream)
-        #image.show() #how to show the image quickly for testing
-
-        httpsReturn = {"status": 200, "message": image}
-        return httpsReturn
-    else:
-        httpsReturn = {"status": 401, "message": "Unauthorized"}
-        return httpsReturn
-
-def generate_ListingID(organizationID:int, location:str, startTime:str) -> str:
-    """Use to get the ListingID from for any listing given that you know the orgnaization that posted it, location and start time"""
+def generate_ListingID (organizationID: int, location: str, startTime: str) -> str:
+    """Get the ListingID for any listing, given its organization, location and start time."""
     return str(organizationID) + location + startTime
+
+
+def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str) -> dict:
+    """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
+    
+    httpsReturn = {"status": 200, "message": "OK"}
+    if db != None:
+        return UNAUTHORIZED
+    listingID = generate_ListingID(organizationID, location, startTime)
+    try:
+        db.collection("listings").document(listingID).set({
+            "foodName": foodType,
+            "description": description,
+            "quantity": quantity,
+            "maxQuantity": quantity,
+            "location": location,
+            "pickupStart": {
+                "Date": startTime,
+                "_seconds": startTime
+            },
+            "pickupEnd": {
+                "Date": endTime,
+                "_seconds": endTime
+            },
+            "imageURL": None,
+            "status": "available",
+            "createdAt": {
+                "Date": startTime,
+                "_seconds": startTime
+            },
+            "organizationID": organizationID
+        })
+        return _response(200,listingID)
+    except Exception as e:
+        return _response(400, str(e))
+
+def delete_listing(listingID:str) -> dict:
+    """Delete a listing from the database."""
+    if db is None:
+        return UNAUTHORIZED
+    docRef = db.collection('listings').document(listingID)
+    docRef.delete()
+    
+    if docRef.get().exists:
+        return _response(409, "Conflict")
+    return _response(204, "No Content")
+
+def edit_listing(listingID:str, field:str, data) -> dict:
+    """Edit a field on a listing."""
+    return edit_database_field("listings", listingID, field, data)
+
+"""Listing reservations"""
+
+@firestore.transactional
+
+def _adjust_spots(transaction,docRef,delta:int) -> int:
+    """Atomically change remaing spots by delta. Raises ValueError if out of range."""
+    snap = docRef.get(transaction=transaction)
+    if not snap.exists:
+        raise KeyError("Listing not foun")
+    data = snap.to_dict()
+    remaining = data["quantity"] + delta
+    maxSpots = data.get("maxQuantity")
+    if remaining < 0 or (maxSpots is not None and remaining > maxSpots):
+        raise ValueError("Reservation amount out of range")
+    transaction.update(docRef, {"quantity": remaining})
+    return remaining
+
+def _change_reservations(listingID: str, delta: int) -> dict:
+    if db is None: 
+        return UNAUTHORIZED
+    try:
+        docRef = db.collection("listings").document(listingID)
+        remaining = _adjust_spots(db.transaction(), docRef,delta)
+        return _response(200, remaining)
+    except ValueError as e:
+        return _response(409, str(e))
+    except KeyError as e:
+        return _response(404,str(e))
+    except Exception as e:
+        return _response(400, str(e))
+    
+def add_reservation(listingID: str, amount: int) -> dict:
+    """Reserve amount spots. Fails with 409 if no spots remain"""
+    return _change_reservations(listingID, -amount)
+
+def remove_reservation(listingID: str, amount: int) -> dict:
+    """remove amount spots. Fails with 409 if exceeds listings max"""
+    return _change_reservations(listingID, amount)
+
+def get_remaining_spots(listingID: str) -> dict:
+    """Gets the remaining spots available in given listing"""
+    return get_database_field("listings",listingID, "quantity")
+
+def _time_until(listingID:str, field:str) -> dict:
+    result = get_database_field("listings",listingID, field)
+    if result["status"] != 200:
+        return result
+    try:
+        target = datetime.fromisoformat(result["message"]["Date"])
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=timezone.utc)
+        delta = target - datetime.now(timezone.utc)
+        minutes = max(math.cell(delta.total_seconds() / 60),0)
+        return _response(200,minutes)
+    except Exception as e:
+        return _response(400, str(e))
+    
+def get_time_until_start(listingID: str) -> dict:
+    """minutes until pickup starts (0) if pickup has started"""
+    return _time_until(listingID, "pickupStart")
+
+def get_time_until_end(listingID: str) -> dict:
+    """minutes until pickup ends"""
+    return _time_until(listingID, "pickupEnd")
+
+@dataclass
+class Listing:
+    foodType: str
+    description: str
+    maxReservations: int
+    location: str
+    organizationID: int
+    startTime: str
+    endTime: str
+    picture: None = None
+    
+    def _post_init_(self):
+        if self.maxReservations < 1:
+            raise ValueError("maxReservations must be at least 1")
+        if datetime.fromisoformat(self.endTime) <= datetime.fromisoformat(self.startTime):
+            raise ValueError("endTime must be after startTime")
+        
+    @property
+    def listingID(self) -> str:
+        return generate_ListingID(self.organizationID, self.location, self.startTime)
+    
+def create_listing(listing:Listing) -> dict:
+    """Writes a validated Liting to the db"""
+    return add_listing(listing.foodType, listing.description, listing.maxReservations,
+                       listing.location, listing.organizationID, listing.startTime,
+                       listing.endTime)
