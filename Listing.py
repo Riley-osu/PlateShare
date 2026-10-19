@@ -1,5 +1,5 @@
 # This file creates a class for listings
-import firebaseToFlutter #Uses this file to communicate between Flutter and Firebase
+import firebaseHelper #Uses this file to communicate between Flutter and Firebase
 from dataclasses import dataclass
 
 @dataclass #dataclass so that editing a varible in one listing will not affect another
@@ -32,7 +32,7 @@ class listing:
         self.endTime = endTime
         self.postID = str(organizationID) + location + startTime
 
-        returnCode = firebaseToFlutter.add_listing(self.foodType,self.description,self.availableReservations,self.location,
+        returnCode = firebaseHelper.add_listing(self.foodType,self.description,self.availableReservations,self.location,
                                       self.organizationID,self.startTime,self.endTime, self.headPicture)
         if returnCode["status"] != 200:
             raise RuntimeError(returnCode)
@@ -45,7 +45,7 @@ class listing:
         # available reservations succesfully add reservation
         if self.currentReservations + amount <= self.available_Reservations:
             self.currentReservations += amount
-            return firebaseToFlutter.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
+            return firebaseHelper.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
         return False
     
     # Function for removing user reservation 
@@ -53,7 +53,7 @@ class listing:
         """Updates both the object and the database. Returns false if it failed to do so"""
         if self.current_Reservations - amount >= 0:
             self.current_Reservations -= amount
-            return firebaseToFlutter.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
+            return firebaseHelper.edit_listing(self.postID, "quantity", self.availableReservations-self.current_Reservations)
         
         self.current_reservations = 0
         return False
@@ -61,7 +61,7 @@ class listing:
     #Function to pull remaining reservation spots
     def get_remaining_spots(self) -> int:
         """Gets the remaining spots available in the given listing."""
-        return firebaseToFlutter.get_database_field(listing, self.postID, "quantity")
+        return firebaseHelper.get_database_field(listing, self.postID, "quantity")
         #return self.available_Reservations - self.current_Reservations
     
     def get_time_until_start(self) -> str:
