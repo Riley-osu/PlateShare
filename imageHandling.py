@@ -29,3 +29,5 @@ class imageHandler:
 
         img.save(byte_stream, format=format, quality=quality)
         return byte_stream.getvalue()
+
+    
