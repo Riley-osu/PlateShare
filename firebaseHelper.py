@@ -2,8 +2,10 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
+from typing import List, Optional, Any
+from fastapi import HTTPException
 
 def init_firestore():
     if not firebase_admin._apps:
@@ -25,14 +27,30 @@ def _response(status: int, message) -> dict:
 
 UNAUTHORIZED = _response(401, "unauthorized")
 
+# Added helper ISO parsing function
+def parse_iso_datetime(dtIn: str) -> datetime:
+    # dt = datetime.fromisoformat(dtIn.replace("Z", "+00:00"))
+    # if dt.tzinfo is None:
+    #     dt = dt.replace(tzinfo = timezone.utc)
+    # return dt
+    try:
+        return datetime.fromisoformat(dtIn.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code = 400, detail = f"Invalid ISO Datetime string: {dtIn}")
+
 def get_database_field(collection:str, document:str, field:str) -> dict:
     """gets a preexisting field within the database. Returns a empty string if it failed to do so"""
     httpsReturn = {"status": 200, "message": "OK"}
-    if db is None:
-        return UNAUTHORIZED
+    # if db is None:
+    #     return UNAUTHORIZED
     try:
-        docData = db.collection(collection).document(document).get().to_dict()
-        return _response(200, docData[field])
+        # docData = db.collection(collection).document(document).get().to_dict()
+        docData = db.collection(collection).document(document).get()
+        if not docData.exists:
+            return _response(404, "Document not found")
+        docData = docData.to_dict()
+        # return _response(200, docData[field])
+        return _response(200, docData.get(field))
     except Exception as e:
         return _response(400, str(e))
 
@@ -79,13 +97,18 @@ def generate_ListingID (organizationID: int, location: str, startTime: str) -> s
     return str(organizationID) + location + startTime
 
 
-def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str) -> dict:
+def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, constraintsList: Optional[List[str]] = None) -> dict:
     """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
     
     httpsReturn = {"status": 200, "message": "OK"}
-    if db != None:
+    # if db != None:
+    #     return UNAUTHORIZED
+
+    if db is None:
         return UNAUTHORIZED
+    
     listingID = generate_ListingID(organizationID, location, startTime)
+
     try:
         db.collection("listings").document(listingID).set({
             "foodName": foodType,
@@ -93,21 +116,31 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
             "quantity": quantity,
             "maxQuantity": quantity,
             "location": location,
-            "pickupStart": {
-                "Date": startTime,
-                "_seconds": startTime
-            },
-            "pickupEnd": {
-                "Date": endTime,
-                "_seconds": endTime
-            },
-            "imageURL": None,
+            "pickupStart": parse_iso_datetime(startTime),
+            "pickupEnd": parse_iso_datetime(endTime),
+            # "pickupStart": {
+            #     "Date": startTime,
+            #     "_seconds": startTime
+            # },
+            # "pickupEnd": {
+            #     "Date": endTime,
+            #     "_seconds": endTime
+            # },
+            "imageURL": imageURL,
             "status": "available",
-            "createdAt": {
-                "Date": startTime,
-                "_seconds": startTime
-            },
-            "organizationID": organizationID
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            # "createdAt": {
+            #     "Date": startTime,
+            #     "_seconds": startTime
+            # },
+            "organizationID": organizationID,
+            "ai_metadata": {
+                "safe": isSafe,
+                "freshness": freshnessScore,
+                "expiration": expirationDays,
+                "allergens": allergensList or [],
+                "constraints": constraintsList or []
+            }
         })
         return _response(200,listingID)
     except Exception as e:
@@ -172,16 +205,27 @@ def get_remaining_spots(listingID: str) -> dict:
     return get_database_field("listings",listingID, "quantity")
 
 def _time_until(listingID:str, field:str) -> dict:
-    result = get_database_field("listings",listingID, field)
-    if result["status"] != 200:
-        return result
+    # result = get_database_field("listings",listingID, field)
+    # if result["status"] != 200:
+    #     return result
     try:
-        target = datetime.fromisoformat(result["message"]["Date"])
-        if target.tzinfo is None:
-            target = target.replace(tzinfo=timezone.utc)
-        delta = target - datetime.now(timezone.utc)
-        minutes = max(math.cell(delta.total_seconds() / 60),0)
-        return _response(200,minutes)
+        # target = datetime.fromisoformat(result["message"]["Date"])
+        # if target.tzinfo is None:
+        #     target = target.replace(tzinfo=timezone.utc)
+        # delta = target - datetime.now(timezone.utc)
+        # minutes = max(math.cell(delta.total_seconds() / 60),0)
+        # return _response(200,minutes)
+        docRef = db.collection("listings").document(listingID).get()
+        if not docRef.exists:
+            return _response(404, "Listing not found")
+
+        targetTime = docRef.to_dict().get(field)
+        if isinstance(targetTime, str):
+            targetTime = parse_iso_datetime(targetTime)
+
+        timeDelta = targetTime - datetime.now(timezone.utc)
+        mins = max(math.ceil(timeDelta.total_seconds() / 60), 0)
+        return _response(200, mins)
     except Exception as e:
         return _response(400, str(e))
     
@@ -202,12 +246,19 @@ class Listing:
     organizationID: int
     startTime: str
     endTime: str
-    picture: None = None
+    imageURL: Optional[str] = None
+
+    # AI Fields
+    isSafe: bool = True
+    freshnessScore: int = 10
+    expirationDays: int = 0
+    allergensList: List[str] = field(default_factory = list)
+    constraintsList: List[str] = field(default_factory = list)
     
-    def _post_init_(self):
+    def __post_init__(self):
         if self.maxReservations < 1:
             raise ValueError("maxReservations must be at least 1")
-        if datetime.fromisoformat(self.endTime) <= datetime.fromisoformat(self.startTime):
+        if parse_iso_datetime(self.endTime) <= parse_iso_datetime(self.startTime):
             raise ValueError("endTime must be after startTime")
         
     @property
@@ -216,6 +267,21 @@ class Listing:
     
 def create_listing(listing:Listing) -> dict:
     """Writes a validated Liting to the db"""
-    return add_listing(listing.foodType, listing.description, listing.maxReservations,
-                       listing.location, listing.organizationID, listing.startTime,
-                       listing.endTime)
+    # return add_listing(listing.foodType, listing.description, listing.maxReservations,
+    #                    listing.location, listing.organizationID, listing.startTime,
+    #                    listing.endTime)
+    return add_listing(
+        foodType = listing.foodType,
+        description = listing.description,
+        quantity = listing.maxReservations,
+        location = listing.location,
+        organizationID = listing.organizationID,
+        startTime = listing.startTime,
+        endTime = listing.endTime,
+        imageURL = listing.imageURL,
+        isSafe = listing.isSafe,
+        freshnessScore = listing.freshnessScore,
+        expirationDays = listing.expirationDays,
+        allergensList = listing.allergensList,
+        constraintsList = listing.constraintsList
+    )

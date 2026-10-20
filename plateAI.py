@@ -38,7 +38,7 @@ def analyze_food(image:bytes) -> dict:
             "freshness": 1-10 (10 being perfectly fresh and 1 being completely spoiled),
             "expiration":  0 or more days until expiration,
             "allergens": ["list", "of", "possible", "allergens", "contained", "within", "food"],
-            "religious_constraints": ["list", "of", "possible", "religious", "restrictions"],
+            "contraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
         }
     """
 
@@ -83,7 +83,7 @@ def analyze_food(image:bytes) -> dict:
         # Splits unwanted string and takes the inner block
         content = content.split("```")[1]
         # Remvoes json tag
-        if content.lower.startswith("json"):
+        if content.lower().startswith("json"):
             content = content[4:]
         content.strip
 
@@ -100,8 +100,10 @@ def test_all():
             image = file.read()
             print(analyze_food(image))
 
+
+
 # Testing sample images
 # test_all()
-with open(imageDir[0], "rb") as file:
-    print(analyze_food(file.read()))
-file.close()
+# with open(imageDir[0], "rb") as file:
+#     print(analyze_food(file.read()))
+# file.close()
