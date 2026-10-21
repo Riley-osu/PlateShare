@@ -92,9 +92,9 @@ def delete_database_user(userName:str) -> dict:
         return _response(409, "Conflict")
     return _response(204, "No Content")
 
-def generate_ListingID (organizationID: int, location: str, startTime: str) -> str:
+def generate_ListingID (organizationID: int, location: str, startTime: str, foodType:str) -> str:
     """Get the ListingID for any listing, given its organization, location and start time."""
-    return str(organizationID) + location + startTime
+    return str(organizationID) + location + startTime + foodType
 
 
 def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, constraintsList: Optional[List[str]] = None) -> dict:
@@ -107,7 +107,7 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
     if db is None:
         return UNAUTHORIZED
     
-    listingID = generate_ListingID(organizationID, location, startTime)
+    listingID = generate_ListingID(organizationID, location, startTime, foodType)
 
     try:
         db.collection("listings").document(listingID).set({
