@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class ApiService {
 
   // Render URl
-  static const String baseUrl = 'https://group-4-software-engineering.onrender.com';
+  static const String baseUrl = 'https://group-4-software-engineer.onrender.com';
 
   // Using the paramaters determined in create_post_page.dart, send post request to render
   static Future<Map<String, dynamic>> createPost({
