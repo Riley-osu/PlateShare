@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import math
 from typing import List, Optional, Any
 from fastapi import HTTPException
+import uuid
 
 def init_firestore():
     if not firebase_admin._apps:
@@ -149,7 +150,7 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
 def delete_listing(listingID:str) -> dict:
     """Delete a listing from the database."""
     if db is None:
-        return UNAUTHORIZED
+        return _response(401, "Unauthorized")
     docRef = db.collection('listings').document(listingID)
     docRef.delete()
     

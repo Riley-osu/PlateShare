@@ -38,7 +38,7 @@ def analyze_food(image:bytes) -> dict:
             "freshness": 1-10 (10 being perfectly fresh and 1 being completely spoiled),
             "expiration":  0 or more days until expiration,
             "allergens": ["list", "of", "possible", "allergens", "contained", "within", "food"],
-            "contraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
+            "constraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
         }
     """
 
@@ -87,10 +87,12 @@ def analyze_food(image:bytes) -> dict:
             content = content[4:]
         content.strip
 
+    print(json.loads(content))
     try:
         return json.loads(content)
     except json.JSONDecodeError as e:
         print("JSON decoding failed: {e}")
+
 
 # Function for local testing
 def test_all():

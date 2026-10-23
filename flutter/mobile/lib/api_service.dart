@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class ApiService {
 
   // Render URl
-  static const String baseUrl = 'https://group-4-software-engineering.onrender.com';
+  static const String baseUrl = 'https://group-4-software-engineer.onrender.com';
 
   // Using the paramaters determined in create_post_page.dart, send post request to render
   static Future<Map<String, dynamic>> createPost({
@@ -27,6 +27,10 @@ class ApiService {
     request.fields['quantity'] = quantity.toString();
     request.fields['pickupStart'] = pickupStart.toIso8601String();
     request.fields['pickupEnd'] = pickupEnd.toIso8601String();
+    request.fields['created_at'] = "string";
+    request.fields['location'] = "Student Union";
+    request.fields['organizationID'] = "67";
+
     //request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
 
     // Attach image file

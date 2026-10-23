@@ -11,6 +11,8 @@ import firebaseHelper
 from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
+from urllib.parse import unquote
+from datetime import datetime, timezone
 
 app = FastAPI(title="PlateShare")
 
@@ -46,19 +48,20 @@ async def create_listing(
     
     # User Fields 
     foodName: str = Form(...),
-    created_at: str = Form(...),
     description: str = Form(...),
+    createdAt: str = Form(...),
     image: UploadFile = File(...),
     location: str = Form(...),
     organizationID: str = Form(...),
-    pickupEnd: str = Form(...),
     pickupStart: str = Form(...),
+    pickupEnd: str = Form(...),
     quantity: int = Form(1),
     reservationCount: int = Form(1),
     status: str = Form("available")
 
 ):
 
+    # createdAt = datetime.now(timezone.utc).isoformat()
     # Ensures image was properly loaded
     imageBytes = await image.read()
     # Otherwise, throw exception
@@ -127,4 +130,26 @@ async def create_listing(
             "constraints": aiConstraints
         }
     }
+
+
+@app.delete("/api/listings/{listingID}")
+async def delete_listing(listingID: str):
+    
+    apiResponse = firebaseHelper.delete_listing((listingID))
+
+    status = apiResponse.get("status", 400)
+    if status not in (200, 204):
+        raise HTTPException(
+            status_code = apiResponse.get("status", 400),
+            detail = apiResponse.get("message", "Delete failed")
+        )
+    return {"status": "success", "message": f"Listing {listingID} deleted"}
+
+# @app.patch("api/listings/{listingID}")
+# async def update_listing(listingID: str):
+    
+#     apiResponse = update_listing(listingID)
+
+#     if (apiResponse.get("status", 400)) not in (200, 204):
+
 
