@@ -38,6 +38,24 @@ def test_database_connection():
     except Exception as e:
         return {"status":404, "message":str(e)}
 
+@app.get("/test-message-send")
+def test_messages():
+    try:
+        returnCode = firebaseHelper.add_message("TestID67Student Union2026-10-23T15:25:00.000Z", True, "firebase005", "testing messages")
+        return returnCode
+    except Exception as e:
+        return {"status":404, "message":str(e)}
+
+
+@app.get("/test-message-get")
+def test_messages():
+    try:
+        returnCode = firebaseHelper.get_listing_message_for_user("TestID67Student Union2026-10-23T15:25:00.000Z", "firebase005")
+        return returnCode
+    except Exception as e:
+        return {"status":404, "message":str(e)}
+
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 

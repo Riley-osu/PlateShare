@@ -153,6 +153,12 @@ def delete_listing(listingID:str) -> dict:
     docRef = db.collection('listings').document(listingID)
     docRef.delete()
     
+
+
+    if not docRef.get().exists:
+        docRef = delete_message(listingID)
+    docRef.delete()
+    
     if docRef.get().exists:
         return _response(409, "Conflict")
     return _response(204, "No Content")
