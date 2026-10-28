@@ -27,7 +27,7 @@ class _MapPageState extends State<MapPage> {
             options: MapOptions(
               initialCenter: edmonLowLibrary,
               initialZoom: 16.0,
-              onTap: (_, __) {
+              onTap: (_, _) {
                 // Dismiss popup card when tapping empty map area
                 if (_selectedPost != null) {
                   setState(() => _selectedPost = null);
@@ -72,7 +72,7 @@ class _MapPageState extends State<MapPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.8),
+                color: Colors.white.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
