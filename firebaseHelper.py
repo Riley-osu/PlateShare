@@ -262,13 +262,13 @@ class Listing:
     description: str
     maxReservations: int
     location: str
-    lat: Optional[float] = None
-    lng: Optional[float] = None
     organizationID: int
     startTime: str
     endTime: str
     imageURL: Optional[str] = None
-
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    
     # AI Fields
     isSafe: bool = True
     freshnessScore: int = 10
