@@ -38,6 +38,7 @@ dependencies:
   firebase_auth: ^6.7.0
   cloud_firestore: ^6.10.0
   image_picker: ^1.1.2 # <-- Added for image selection functionality
+  geolocator: ^10.1.0 # for handling location services
   flutter_map: ^6.1.0 # or latest version
   latlong2: ^0.9.0    # for handling coordinates
 
