@@ -106,6 +106,8 @@ async def create_listing(
             startTime = pickupStart,
             endTime = pickupEnd,
             imageURL = imageURL,
+            lat = lat, 
+            lng = lng,
             isSafe = aiSafe,
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
