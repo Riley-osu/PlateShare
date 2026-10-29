@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "694537319460",
+    "project_id": "plateshare-6fcd3",
+    "storage_bucket": "plateshare-6fcd3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:694537319460:android:f76ba4d95b255d406514b1",
+        "android_client_info": {
+          "package_name": "com.example.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCXrb6L2cefwTpgDj8apJS47_C1NEW_Yhc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
