@@ -152,6 +152,11 @@ def delete_listing(listingID:str) -> dict:
         return UNAUTHORIZED
     docRef = db.collection('listings').document(listingID)
     docRef.delete()
+
+
+    if not docRef.get().exists:
+        docRef = delete_message(listingID)
+    docRef.delete()
     
     if docRef.get().exists:
         return _response(409, "Conflict")
@@ -236,6 +241,73 @@ def get_time_until_start(listingID: str) -> dict:
 def get_time_until_end(listingID: str) -> dict:
     """minutes until pickup ends"""
     return _time_until(listingID, "pickupEnd")
+
+
+def delete_message(listingID: str) -> dict:
+    """Deletes the message document for a given listingID."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection("messages").document(listingID).delete()
+        if not db.collection("messages").document(listingID).get().exists:
+            return _response(409, "Conflict")
+        return _response(204, f"No Content")
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def add_message(listingID: str, userSentTheMessage: bool, userID: str, content: str) -> dict:
+    """Adds a new message to the database tied between a user and a listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        msgRef = db.collection("messages").document(listingID)
+        newMessage = {
+            "userID": userID,
+            "userSentTheMessage": userSentTheMessage,
+            "content": content,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        # adds the message to the list or creates doc if it doesn't exist
+        msgRef.set({
+            "messages": firestore.ArrayUnion([newMessage])
+        }, merge=True)
+        return _response(201, msgRef.id)
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def get_listing_messages(listingID: str) -> dict:
+    """Retrieves all messages for a specific listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        msgRef = db.collection("messages").document(listingID)
+        doc = msgRef.get()
+        if not doc.exists:
+            return _response(404, "Page Not Found")
+        
+        messages: List[Any] = doc.to_dict().get("messages", [])
+        return _response(200, messages)
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def get_listing_message_for_user(listingID: str, UserID: str) -> dict:
+    """Retrieves all messages for a specific user within a listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        allMessages = get_listing_messages(listingID)
+        if int(allMessages["status"]) != 200:
+            return allMessages
+        allMessages = allMessages["message"]
+
+        
+        userMessage = [msg for msg in allMessages if msg.get("userID") == UserID] #a compact for loop to get all messages from a user
+        return _response(200, userMessage)
+    except Exception as e:
+        return _response(400, str(e))
 
 @dataclass
 class Listing:
