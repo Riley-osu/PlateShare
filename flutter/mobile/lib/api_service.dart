@@ -56,4 +56,80 @@ class ApiService {
   }
   }
 
+
+
+// Update Listing function
+static Future<Map<String, dynamic>> updateListing({
+  required String listingId,
+  String? foodName,
+  String? description,
+  int? quantity,
+  String? location,
+  DateTime? pickupStart,
+  DateTime? pickupEnd,
+  String? status,
+  File? imageFile, // I included this parameter although we did not discuss it -Xander
+  }) async {
+    final url = Uri.parse('$baseUrl/api/listings/$listingId');
+
+    try {
+      final request = http.MultipartRequest('PATCH', url);
+
+    // Attach form fields if they are not null
+      if (foodName != null) request.fields['foodName'] = foodName;
+      if (description != null) request.fields['description'] = description;
+      if (quantity != null) request.fields['quantity'] = quantity.toString();
+      if (location != null) request.fields['location'] = location;
+      if (pickupStart != null) request.fields['pickupStart'] = pickupStart.toIso8601String();
+      if (pickupEnd != null) request.fields['pickupEnd'] = pickupEnd.toIso8601String();
+      if (status != null) request.fields['status'] = status;
+      if (imageFile != null) {
+        // Handle new image file upload
+        final imageStream = http.ByteStream(imageFile.openRead());
+        final imageLength = await imageFile.length();
+
+        final multipartFile = http.MultipartFile(
+          'image',
+          imageStream,
+          imageLength,
+          filename: imageFile.path.split('/').last,
+        );
+        request.files.add(multipartFile);
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to update listing: ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Error updating listing: $e');
+      rethrow;
+    }
+  
+
+  }
+
+  static Future<Map<String, dynamic>> deleteListing({
+    required String listingId,
+    }) async {
+      final url = Uri.parse('$baseUrl/api/listings/$listingId');
+
+      try {
+        final response = await http.delete(url);
+
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body) as Map<String, dynamic>;
+        } else {
+          throw Exception('Failed to delete listing: ${response.statusCode}: ${response.body}');
+        }
+      } catch (e) {
+        print('Error deleting listing: $e');
+        rethrow;
+      }
+  }
+
 }
