@@ -97,7 +97,9 @@ def generate_ListingID (organizationID: int, location: str, startTime: str, food
     return str(organizationID) + location + startTime + foodType
 
 
-def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, constraintsList: Optional[List[str]] = None) -> dict:
+def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, 
+                isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, 
+                constraintsList: Optional[List[str]] = None, lat: Optional[float] = None, lng: Optional[float] = None) -> dict:
     """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
     
     httpsReturn = {"status": 200, "message": "OK"}
@@ -116,6 +118,8 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
             "quantity": quantity,
             "maxQuantity": quantity,
             "location": location,
+            "lat": lat,
+            "lng": lng,
             "pickupStart": parse_iso_datetime(startTime),
             "pickupEnd": parse_iso_datetime(endTime),
             # "pickupStart": {
@@ -162,8 +166,23 @@ def delete_listing(listingID:str) -> dict:
         return _response(409, "Conflict")
     return _response(204, "No Content")
 
+def edit_listing_location(listingID: str, location: str, lat:float, lng:float) -> dict:
+    """Updates a listings address AND coordinates. edit_listing only 
+    changes one field at a time"""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection("listings").document(listingID).update({
+            "location": location, "lat": lat, "lng": lng
+        })
+        return _response(200, "OK")
+    except Exception as e:
+        return _response(400, "OK")
+    
 def edit_listing(listingID:str, field:str, data) -> dict:
     """Edit a field on a listing."""
+    if field in ("location", "lat", "lng"):
+        return _response(400, "use edit_listing_location so coordinates are synced")
     return edit_database_field("listings", listingID, field, data)
 
 """Listing reservations"""
@@ -319,7 +338,9 @@ class Listing:
     startTime: str
     endTime: str
     imageURL: Optional[str] = None
-
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    
     # AI Fields
     isSafe: bool = True
     freshnessScore: int = 10
@@ -347,6 +368,8 @@ def create_listing(listing:Listing) -> dict:
         description = listing.description,
         quantity = listing.maxReservations,
         location = listing.location,
+        lat = listing.lat,
+        lng = listing.lng,
         organizationID = listing.organizationID,
         startTime = listing.startTime,
         endTime = listing.endTime,

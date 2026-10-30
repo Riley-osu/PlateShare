@@ -11,6 +11,7 @@ import firebaseHelper
 from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
+from geoCoding import geocodeAddress, geocodeError
 
 app = FastAPI(title="PlateShare")
 
@@ -83,6 +84,12 @@ async def create_listing(
     if not imageBytes:
         raise HTTPException(status_code = 400, detail = "Uploaded image is empty")
 
+    """Geocodes the provided address"""
+    try:
+        lat,lng = await geocodeAddress(location)
+    except geocodeError as e:
+        raise HTTPException(status_code = 400, detail = str(e))
+    
     # AI Metadata
     aiSafe = True
     aiFreshness = 10
@@ -117,6 +124,8 @@ async def create_listing(
             startTime = pickupStart,
             endTime = pickupEnd,
             imageURL = imageURL,
+            lat = lat, 
+            lng = lng,
             isSafe = aiSafe,
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
