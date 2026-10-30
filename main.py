@@ -11,6 +11,7 @@ import firebaseHelper
 from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
+from geoCoding import *
 
 app = FastAPI(title="PlateShare")
 
