@@ -11,21 +11,23 @@ import 'main_dashboard.dart';
 
 export 'user_data.dart';
 
+// Global lists to store registered users and available food posts in memory
 List<UserData> registeredUsersList = [];
-
 List<FoodPost> globalPostsList = [];
 
+// Entry point of the Flutter application; initializes Firebase and runs the app
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize Firebase using platform-specific options
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
-
   );
 
   runApp(const MyApp());
 }
 
+// Data model representing a food post offered by an organization
 class FoodPost {
   String id;
   String orgName;
@@ -50,9 +52,13 @@ class FoodPost {
     required this.endTime,
     required this.remainingSlots,
   });
+
+  double? get latitude => null;
+
+  double? get longitude => null;
 }
 
-// Main Application
+// Root application widget configured with app themes and starting screen
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -60,7 +66,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Okstate Portal',
+      title: 'Plate Share',
       theme: ThemeData(
         primarySwatch: Colors.orange,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
@@ -71,7 +77,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// LANDING SCREEN
+// Landing screen welcoming users with options to navigate to Login or Sign Up
 class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
 
@@ -88,7 +94,6 @@ class LandingScreen extends StatelessWidget {
             end: Alignment.bottomCenter,
           ),
         ),
-
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
@@ -97,21 +102,19 @@ class LandingScreen extends StatelessWidget {
               const Icon(Icons.school, size: 90, color: Colors.white),
               const SizedBox(height: 20),
               const Text(
-                "Welcome to OSU App",
+                "Welcome to PlateShare",
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(height: 10),
               const Text(
                 "Please Log In or Sign Up using your @okstate.edu email to continue.",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 14),
               ),
-
               const SizedBox(height: 50),
 
               // Login Button Container
@@ -127,6 +130,7 @@ class LandingScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
+                    // Navigate to AuthScreen in login mode
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -139,6 +143,7 @@ class LandingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 15),
+
               // Signup Button Container
               SizedBox(
                 width: double.infinity,
@@ -152,6 +157,7 @@ class LandingScreen extends StatelessWidget {
                     ),
                   ),
                   onPressed: () {
+                    // Navigate to AuthScreen in sign up mode
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -171,7 +177,7 @@ class LandingScreen extends StatelessWidget {
   }
 }
 
-// AUTHENTICATION SCREEN
+// Authentication screen supporting both Login and Sign Up flows
 class AuthScreen extends StatefulWidget {
   final bool isSignUp;
   const AuthScreen({super.key, required this.isSignUp});
@@ -181,6 +187,7 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  // Text controllers for email, password, and organization name inputs
   final e1 = TextEditingController();
   final p1 = TextEditingController();
   final o1 = TextEditingController();
@@ -194,24 +201,30 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize signup mode based on widget parameters passed
     isSignUpPage = widget.isSignUp;
   }
 
   @override
   void dispose() {
+    // Dispose text controllers to free up memory when widget is destroyed
     e1.dispose();
     p1.dispose();
     o1.dispose();
     super.dispose();
   }
   
+  // Handles form validation, Firebase authentication (signup/signin), status verification, and dashboard navigation
   Future<void> handleAuthentication() async {
+    // Hide keyboard
     FocusScope.of(context).unfocus();
 
+    // Validate form fields before proceeding
     if (!myFormKey.currentState!.validate()) {
       return;
     }
 
+    // Show loading indicator
     setState(() {
       isLoading = true;
     });
@@ -220,13 +233,19 @@ class _AuthScreenState extends State<AuthScreen> {
     final userPass = p1.text;
 
     try {
+      // Execute sign up or sign in based on the current page mode
       if (isSignUpPage) {
-        await authService.value.createAccount(email: userEmail, password: userPass, isOrganization: isOrgSwitch, orgName: isOrgSwitch ? o1.text.trim() : null);
+        await authService.value.createAccount(
+          email: userEmail, 
+          password: userPass, 
+          isOrganization: isOrgSwitch, 
+          orgName: isOrgSwitch ? o1.text.trim() : null
+        );
       } else {
         await authService.value.signIn(email: userEmail, password: userPass);
-
       }
 
+      // Fetch user profile data from backend
       final loggedUser = await authService.value.getUserData();
 
       if (loggedUser == null) {
@@ -234,24 +253,25 @@ class _AuthScreenState extends State<AuthScreen> {
       }
       if (loggedUser.status != 'active') {
         await authService.value.signOut();
-
         throw Exception("Your account is not active.");
       }
 
       if (!mounted) return;
 
-      // Open Dashboard
+      // Navigate to Main Dashboard and clear navigation history stack
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-        builder: (context) => MainDashboard(
-          currentUser: loggedUser, initialIsAdmin: loggedUser.isAdmin,
+          builder: (context) => MainDashboard(
+            currentUser: loggedUser, 
+            initialIsAdmin: loggedUser.isAdmin,
           ),
-      ),
+        ),
         (route) => false,
       );
-  
+ 
     } on FirebaseAuthException catch (e) {
+      // Handle specific Firebase authentication errors and show user-friendly messages
       if (!mounted) return;
       String message = "Authentication failed";
 
@@ -272,14 +292,15 @@ class _AuthScreenState extends State<AuthScreen> {
       );
 
     } catch (e) {
+      // Handle any other unexpected errors
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"),
-        ),
+        SnackBar(content: Text("Error: $e")),
       );
 
     } finally {
+      // Reset loading indicator state
       if (mounted) {
         setState(() {
           isLoading = false;
@@ -311,7 +332,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Email Input Field
+                // Email Input Field with @okstate.edu validation
                 TextFormField(
                   controller: e1,
                   keyboardType: TextInputType.emailAddress,
@@ -333,7 +354,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Password Input Field
+                // Password Input Field with length checks for sign up
                 TextFormField(
                   controller: p1,
                   obscureText: true,
@@ -354,38 +375,40 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Organization Sign-in
-                if (isSignUpPage) ...[// 
+                // Organization Sign-in toggle & input fields (visible only during sign up)
+                if (isSignUpPage) ...[
                   SwitchListTile(
                     title: const Text("Sign in as Organization"),
                     subtitle: const Text("Required if you plan to post items"),
                     value: isOrgSwitch,
                     onChanged: (value) {
                       setState(() {
-                      isOrgSwitch = value;
-                    });
-                  },
-                ),
-                if (isOrgSwitch) ...[
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: o1,
-                    decoration: const InputDecoration(
-                      labelText: "Organization Name",
-                      hintText: "e.g., Student Government Association",
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.business),
-                    ),
-                    validator: (value) {
-                      if (isOrgSwitch && (value == null || value.trim().isEmpty)) {
-                        return "Organization name is required to post";
-                      }
-                      return null;
+                        isOrgSwitch = value;
+                      });
                     },
                   ),
-                ],
-              ],  
+                  if (isOrgSwitch) ...[
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: o1,
+                      decoration: const InputDecoration(
+                        labelText: "Organization Name",
+                        hintText: "e.g., Student Government Association",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.business),
+                      ),
+                      validator: (value) {
+                        if (isOrgSwitch && (value == null || value.trim().isEmpty)) {
+                          return "Organization name is required to post";
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
+                ],  
                 const SizedBox(height: 30),
+
+                // Submit / Authentication Action Button
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
@@ -398,8 +421,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           style: const TextStyle(fontSize: 18),
                         ),
                 ),
-              
-              ]
+              ],
             ),
           ),
         ),

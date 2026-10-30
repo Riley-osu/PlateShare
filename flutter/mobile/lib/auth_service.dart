@@ -70,7 +70,7 @@ Future<UserCredential> createAccount({
     return credential;
   }
   
-  // Get User Profile 
+  // Get User Profile. 
   Future<UserData?> getUserData() async {
     final user = firebaseAuth.currentUser;
 

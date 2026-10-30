@@ -93,12 +93,14 @@ def delete_database_user(userName:str) -> dict:
         return _response(409, "Conflict")
     return _response(204, "No Content")
 
-def generate_ListingID (organizationID: int, location: str, startTime: str) -> str:
+def generate_ListingID (organizationID: int, location: str, startTime: str, foodType:str) -> str:
     """Get the ListingID for any listing, given its organization, location and start time."""
-    return str(organizationID) + location + startTime
+    return str(organizationID) + location + startTime + foodType
 
 
-def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, constraintsList: Optional[List[str]] = None) -> dict:
+def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, 
+                isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, 
+                constraintsList: Optional[List[str]] = None, lat: Optional[float] = None, lng: Optional[float] = None) -> dict:
     """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
     
     httpsReturn = {"status": 200, "message": "OK"}
@@ -108,7 +110,7 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
     if db is None:
         return UNAUTHORIZED
     
-    listingID = generate_ListingID(organizationID, location, startTime)
+    listingID = generate_ListingID(organizationID, location, startTime, foodType)
 
     try:
         db.collection("listings").document(listingID).set({
@@ -117,6 +119,8 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
             "quantity": quantity,
             "maxQuantity": quantity,
             "location": location,
+            "lat": lat,
+            "lng": lng,
             "pickupStart": parse_iso_datetime(startTime),
             "pickupEnd": parse_iso_datetime(endTime),
             # "pickupStart": {
@@ -153,13 +157,33 @@ def delete_listing(listingID:str) -> dict:
         return _response(401, "Unauthorized")
     docRef = db.collection('listings').document(listingID)
     docRef.delete()
+
+
+    if not docRef.get().exists:
+        docRef = delete_message(listingID)
+    docRef.delete()
     
     if docRef.get().exists:
         return _response(409, "Conflict")
     return _response(204, "No Content")
 
+def edit_listing_location(listingID: str, location: str, lat:float, lng:float) -> dict:
+    """Updates a listings address AND coordinates. edit_listing only 
+    changes one field at a time"""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection("listings").document(listingID).update({
+            "location": location, "lat": lat, "lng": lng
+        })
+        return _response(200, "OK")
+    except Exception as e:
+        return _response(400, "OK")
+    
 def edit_listing(listingID:str, field:str, data) -> dict:
     """Edit a field on a listing."""
+    if field in ("location", "lat", "lng"):
+        return _response(400, "use edit_listing_location so coordinates are synced")
     return edit_database_field("listings", listingID, field, data)
 
 """Listing reservations"""
@@ -238,6 +262,73 @@ def get_time_until_end(listingID: str) -> dict:
     """minutes until pickup ends"""
     return _time_until(listingID, "pickupEnd")
 
+
+def delete_message(listingID: str) -> dict:
+    """Deletes the message document for a given listingID."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        db.collection("messages").document(listingID).delete()
+        if not db.collection("messages").document(listingID).get().exists:
+            return _response(409, "Conflict")
+        return _response(204, f"No Content")
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def add_message(listingID: str, userSentTheMessage: bool, userID: str, content: str) -> dict:
+    """Adds a new message to the database tied between a user and a listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        msgRef = db.collection("messages").document(listingID)
+        newMessage = {
+            "userID": userID,
+            "userSentTheMessage": userSentTheMessage,
+            "content": content,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        # adds the message to the list or creates doc if it doesn't exist
+        msgRef.set({
+            "messages": firestore.ArrayUnion([newMessage])
+        }, merge=True)
+        return _response(201, msgRef.id)
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def get_listing_messages(listingID: str) -> dict:
+    """Retrieves all messages for a specific listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        msgRef = db.collection("messages").document(listingID)
+        doc = msgRef.get()
+        if not doc.exists:
+            return _response(404, "Page Not Found")
+        
+        messages: List[Any] = doc.to_dict().get("messages", [])
+        return _response(200, messages)
+    except Exception as e:
+        return _response(400, str(e))
+
+
+def get_listing_message_for_user(listingID: str, UserID: str) -> dict:
+    """Retrieves all messages for a specific user within a listing."""
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        allMessages = get_listing_messages(listingID)
+        if int(allMessages["status"]) != 200:
+            return allMessages
+        allMessages = allMessages["message"]
+
+        
+        userMessage = [msg for msg in allMessages if msg.get("userID") == UserID] #a compact for loop to get all messages from a user
+        return _response(200, userMessage)
+    except Exception as e:
+        return _response(400, str(e))
+
 @dataclass
 class Listing:
     foodType: str
@@ -248,7 +339,9 @@ class Listing:
     startTime: str
     endTime: str
     imageURL: Optional[str] = None
-
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    
     # AI Fields
     isSafe: bool = True
     freshnessScore: int = 10
@@ -276,6 +369,8 @@ def create_listing(listing:Listing) -> dict:
         description = listing.description,
         quantity = listing.maxReservations,
         location = listing.location,
+        lat = listing.lat,
+        lng = listing.lng,
         organizationID = listing.organizationID,
         startTime = listing.startTime,
         endTime = listing.endTime,

@@ -11,8 +11,6 @@ import firebaseHelper
 from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
-from urllib.parse import unquote
-from datetime import datetime, timezone
 
 app = FastAPI(title="PlateShare")
 
@@ -40,6 +38,24 @@ def test_database_connection():
     except Exception as e:
         return {"status":404, "message":str(e)}
 
+@app.get("/test-message-send")
+def test_messages():
+    try:
+        returnCode = firebaseHelper.add_message("TestID67Student Union2026-10-23T15:25:00.000Z", True, "firebase005", "testing messages")
+        return returnCode
+    except Exception as e:
+        return {"status":404, "message":str(e)}
+
+
+@app.get("/test-message-get")
+def test_messages():
+    try:
+        returnCode = firebaseHelper.get_listing_message_for_user("TestID67Student Union2026-10-23T15:25:00.000Z", "firebase005")
+        return returnCode
+    except Exception as e:
+        return {"status":404, "message":str(e)}
+
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
@@ -68,6 +84,12 @@ async def create_listing(
     if not imageBytes:
         raise HTTPException(status_code = 400, detail = "Uploaded image is empty")
 
+    """Geocodes the provided address"""
+    try:
+        lat,lng = await geocodeAddress(location)
+    except geocodeError as e:
+        raise HTTPException(status_code = 400, detail = str(e))
+    
     # AI Metadata
     aiSafe = True
     aiFreshness = 10
@@ -102,6 +124,8 @@ async def create_listing(
             startTime = pickupStart,
             endTime = pickupEnd,
             imageURL = imageURL,
+            lat = lat, 
+            lng = lng,
             isSafe = aiSafe,
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
