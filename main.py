@@ -12,6 +12,7 @@ from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
 from geoCoding import *
+from typing import Optional
 
 app = FastAPI(title="PlateShare")
 
@@ -170,11 +171,51 @@ async def delete_listing(listingID: str):
         )
     return {"status": "success", "message": f"Listing {listingID} deleted"}
 
-# @app.patch("api/listings/{listingID}")
-# async def update_listing(listingID: str):
-    
-#     apiResponse = update_listing(listingID)
+@app.patch("/api/listings/{listingID}")
+async def update_listing(
+    listingID: str,
+    foodName: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    quantity: Optional[int] = Form(None),
+    location: Optional[str] = Form(None),
+    pickupStart: Optional[str] = Form(None),
+    pickupEnd: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+):
+    updateFields = {}
 
-#     if (apiResponse.get("status", 400)) not in (200, 204):
+    if foodName is not None:
+        updateFields["foodType"] = foodName
+    if description is not None:
+        updateFields["description"] = description
+    if quantity is not None:
+        updateFields["maxReservations"] = quantity
+    if location is not None:
+        updateFields["location"] = location
+        try:
+            lat, lng = await geocodeAddress(location)
+            updateFields["lat"] = lat
+            updateFields["lng"] = lng
+        except Exception as e:
+            raise HTTPException(status_code = 400, detail = str(e))
+    if pickupStart is not None:
+        updateFields["startTime"] = pickupStart
+    if pickupEnd is not None:
+        updateFields["endTime"] = pickupEnd
+    if status is not None:
+        updateFields["status"] = status
 
+    if image is not None:
+        imageBytes = await image.read()
+        if imageBytes:
+            base64Str = base64.b64encode(imageBytes).decode("utf-8")
+            updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
 
+    if not updateFields:
+        raise HTTPException(status_code = 400, detail = "No fields were provided.")
+
+    apiResponse = firebaseHelper.update_listing(listingID, updateFields)
+    if apiResponse.get("status", 400) not in (200, 204):
+        raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
+    return {"status": "success", "message": f"Listing {listingID} updated successfully."}

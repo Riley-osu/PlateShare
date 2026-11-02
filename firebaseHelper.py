@@ -180,11 +180,24 @@ def edit_listing_location(listingID: str, location: str, lat:float, lng:float) -
     except Exception as e:
         return _response(400, "OK")
     
-def edit_listing(listingID:str, field:str, data) -> dict:
-    """Edit a field on a listing."""
-    if field in ("location", "lat", "lng"):
-        return _response(400, "use edit_listing_location so coordinates are synced")
-    return edit_database_field("listings", listingID, field, data)
+# def edit_listing(listingID:str, field:str, data) -> dict:
+#     """Edit a field on a listing."""
+#     if field in ("location", "lat", "lng"):
+#         return _response(400, "use edit_listing_location so coordinates are synced")
+#     return edit_database_field("listings", listingID, field, data)
+
+def update_listing(listingID: str, updateFields: dict) -> dict:
+    if db is None:
+        return UNAUTHORIZED
+    try:
+        if "startTime" in updateFields:
+            updateFields["startTime"] = parse_iso_datetime(updateFields["startTime"])
+        if "endTime" in updateFields:
+            updateFields["endTime"] = parse_iso_datetime(updateFields["endTime"])
+        db.collection("listings").document(listingID).update(updateFields)
+        return _response(200, "OK")
+    except Exception as e:
+        return _response(400, str(e))
 
 """Listing reservations"""
 
