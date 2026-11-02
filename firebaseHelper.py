@@ -34,9 +34,9 @@ def parse_iso_datetime(dtIn: str) -> datetime:
     #     dt = dt.replace(tzinfo = timezone.utc)
     # return dt
     try:
-        return _response(200,datetime.fromisoformat(dtIn.replace("Z", "+00:00")))
-    except Exception as e:
-        return _response(400, str(e))
+        return datetime.fromisoformat(dtIn.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code = 400, detail = f"Invalid ISO Datetime string: {dtIn}")
 
 def get_database_field(collection:str, document:str, field:str) -> dict:
     """gets a preexisting field within the database. Returns a empty string if it failed to do so"""
@@ -96,6 +96,7 @@ def generate_ListingID (organizationID: int, location: str, startTime: str, food
     """Get the ListingID for any listing, given its organization, location and start time."""
     return str(organizationID) + location + startTime + foodType
 
+
 def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, 
                 isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, 
                 constraintsList: Optional[List[str]] = None, lat: Optional[float] = None, lng: Optional[float] = None) -> dict:
@@ -107,13 +108,8 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
 
     if db is None:
         return UNAUTHORIZED
-
+    
     listingID = generate_ListingID(organizationID, location, startTime, foodType)
-
-    pickupTime = parse_iso_datetime(startTime)
-    pickupEnd = parse_iso_datetime(endTime)
-    if pickupTime["status"] == 400 or pickupTime["status"] == 400:
-        return pickupTime
 
     try:
         db.collection("listings").document(listingID).set({
@@ -181,7 +177,7 @@ def edit_listing_location(listingID: str, location: str, lat:float, lng:float) -
         })
         return _response(200, "OK")
     except Exception as e:
-        return _response(400, str(e))
+        return _response(400, "OK")
     
 def edit_listing(listingID:str, field:str, data) -> dict:
     """Edit a field on a listing."""
@@ -247,14 +243,11 @@ def _time_until(listingID:str, field:str) -> dict:
         if not docRef.exists:
             return _response(404, "Listing not found")
 
-        targetTime = str(docRef.to_dict().get(field))
+        targetTime = docRef.to_dict().get(field)
         if isinstance(targetTime, str):
-            parsed_res = parse_iso_datetime(targetTime)
-            if parsed_res["status"] != 200:
-                return parsed_res
             targetTime = parse_iso_datetime(targetTime)
 
-        timeDelta = targetTime["message"] - datetime.now(timezone.utc)
+        timeDelta = targetTime - datetime.now(timezone.utc)
         mins = max(math.ceil(timeDelta.total_seconds() / 60), 0)
         return _response(200, mins)
     except Exception as e:
@@ -268,17 +261,19 @@ def get_time_until_end(listingID: str) -> dict:
     """minutes until pickup ends"""
     return _time_until(listingID, "pickupEnd")
 
+
 def delete_message(listingID: str) -> dict:
     """Deletes the message document for a given listingID."""
     if db is None:
         return UNAUTHORIZED
     try:
         db.collection("messages").document(listingID).delete()
-        if db.collection("messages").document(listingID).get().exists:
+        if not db.collection("messages").document(listingID).get().exists:
             return _response(409, "Conflict")
         return _response(204, f"No Content")
     except Exception as e:
         return _response(400, str(e))
+
 
 def add_message(listingID: str, userSentTheMessage: bool, userID: str, content: str) -> dict:
     """Adds a new message to the database tied between a user and a listing."""
@@ -300,6 +295,7 @@ def add_message(listingID: str, userSentTheMessage: bool, userID: str, content: 
     except Exception as e:
         return _response(400, str(e))
 
+
 def get_listing_messages(listingID: str) -> dict:
     """Retrieves all messages for a specific listing."""
     if db is None:
@@ -314,6 +310,7 @@ def get_listing_messages(listingID: str) -> dict:
         return _response(200, messages)
     except Exception as e:
         return _response(400, str(e))
+
 
 def get_listing_message_for_user(listingID: str, UserID: str) -> dict:
     """Retrieves all messages for a specific user within a listing."""
@@ -354,12 +351,12 @@ class Listing:
     def __post_init__(self):
         if self.maxReservations < 1:
             raise ValueError("maxReservations must be at least 1")
-        if parse_iso_datetime(self.endTime)["message"] <= parse_iso_datetime(self.startTime)["message"]:
+        if parse_iso_datetime(self.endTime) <= parse_iso_datetime(self.startTime):
             raise ValueError("endTime must be after startTime")
         
     @property
     def listingID(self) -> str:
-        return generate_ListingID(self.organizationID, self.location, self.startTime, self.foodType)
+        return generate_ListingID(self.organizationID, self.location, self.startTime)
     
 def create_listing(listing:Listing) -> dict:
     """Writes a validated Liting to the db"""
