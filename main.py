@@ -68,7 +68,7 @@ async def create_listing(
     foodName: str = Form(...),
     description: str = Form(...),
     createdAt: str = Form(...),
-    image: UploadFile = File(...),
+    image: Optional[UploadFile] = None,
     location: str = Form(...),
     organizationID: str = Form(...),
     pickupStart: str = Form(...),
@@ -79,12 +79,8 @@ async def create_listing(
 
 ):
 
+
     # createdAt = datetime.now(timezone.utc).isoformat()
-    # Ensures image was properly loaded
-    imageBytes = await image.read()
-    # Otherwise, throw exception
-    if not imageBytes:
-        raise HTTPException(status_code = 400, detail = "Uploaded image is empty")
 
     """Geocodes the provided address"""
     try:
@@ -92,28 +88,42 @@ async def create_listing(
     except geocodeError as e:
         raise HTTPException(status_code = 400, detail = str(e))
     
-    # AI Metadata
+    # AI Metadata Default Fields
     aiSafe = True
     aiFreshness = 10
     aiExpiration = 0
     aiAllergens = []
     aiConstraints = []
+    aiConfidence = 100
 
-    # Runs image through PlateAI (Ollama Cloud) for analysis 
-    try:
-        aiResponse = analyze_food(imageBytes)
-        aiSafe = aiResponse.get("safe", True)
-        aiFreshness = aiResponse.get("freshness", 10)
-        aiExpiration = aiResponse.get("expiration", 0)
-        aiAllergens = aiResponse.get("allergens", [])
-        aiConstraints = aiResponse.get("constraints", [])
-    except Exception as e:
-        # print(e)
-        pass
+    imageURL = None
 
-    # Saves image as B64 URL that Firestore can store
-    base64Str = base64.b64encode(imageBytes).decode("utf-8")
-    imageURL = f"data:image/jpeg;base64,{base64Str}"
+    # Ensures image was properly loaded if inputted
+    if image is not None:
+        imageBytes = await image.read()
+        base64Str = base64.b64encode(imageBytes).decode("utf-8")
+        imageURL = f"data:image/jpeg;base64,{base64Str}"
+        
+        # Runs image through PlateAI (Ollama Cloud) for analysis
+        if imageBytes:
+            try:
+                aiResponse = analyze_food(imageBytes)
+                aiSafe = aiResponse.get("safe", True)
+                aiFreshness = aiResponse.get("freshness", 10)
+                aiExpiration = aiResponse.get("expiration", 0)
+                aiAllergens = aiResponse.get("allergens", [])
+                aiConstraints = aiResponse.get("constraints", [])
+                aiConfidence = aiResponse.get("food_confidence", 0)
+            except Exception as e:
+                # print(e)
+                pass
+
+            if aiConfidence >= 80:
+                # Saves image as B64 URL that Firestore can store
+                base64Str = base64.b64encode(imageBytes).decode("utf-8")
+                imageURL = f"data:image/jpeg;base64,{base64Str}"
+            else:
+                imageURL = None
 
     # Attempts to create listing using helper function dataclass
     try:
@@ -132,7 +142,8 @@ async def create_listing(
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
             allergensList = aiAllergens,
-            constraintsList = aiConstraints  
+            constraintsList = aiConstraints,
+            reservedBy = ""
         )
     except Exception as e:
         raise e
@@ -182,11 +193,12 @@ async def update_listing(
     pickupEnd: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
+    reservedBy: Optional[str] = Form(None)
 ):
     updateFields = {}
 
     if foodName is not None:
-        updateFields["foodType"] = foodName
+        updateFields["foodName"] = foodName
     if description is not None:
         updateFields["description"] = description
     if quantity is not None:
@@ -211,6 +223,9 @@ async def update_listing(
         if imageBytes:
             base64Str = base64.b64encode(imageBytes).decode("utf-8")
             updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
+
+    if reservedBy is not None:
+        updateFields["reservedBy"] = reservedBy
 
     if not updateFields:
         raise HTTPException(status_code = 400, detail = "No fields were provided.")
