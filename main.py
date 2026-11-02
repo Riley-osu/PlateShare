@@ -101,9 +101,7 @@ async def create_listing(
     # Ensures image was properly loaded if inputted
     if image is not None:
         imageBytes = await image.read()
-        base64Str = base64.b64encode(imageBytes).decode("utf-8")
-        imageURL = f"data:image/jpeg;base64,{base64Str}"
-        
+
         # Runs image through PlateAI (Ollama Cloud) for analysis
         if imageBytes:
             try:
@@ -218,11 +216,48 @@ async def update_listing(
     if status is not None:
         updateFields["status"] = status
 
+
+    imageURL = None
+
+    # Ensures image was properly loaded if inputted
     if image is not None:
         imageBytes = await image.read()
+
+        # Runs image through PlateAI (Ollama Cloud) for analysis
         if imageBytes:
-            base64Str = base64.b64encode(imageBytes).decode("utf-8")
-            updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
+            # AI Metadata Default Fields
+            aiSafe = True
+            aiFreshness = 10
+            aiExpiration = 0
+            aiAllergens = []
+            aiConstraints = []
+            aiConfidence = 100
+
+            try:
+                aiResponse = analyze_food(imageBytes)
+                aiSafe = aiResponse.get("safe", True)
+                aiFreshness = aiResponse.get("freshness", 10)
+                aiExpiration = aiResponse.get("expiration", 0)
+                aiAllergens = aiResponse.get("allergens", [])
+                aiConstraints = aiResponse.get("constraints", [])
+                aiConfidence = aiResponse.get("food_confidence", 0)
+            except Exception:
+                pass
+
+            if aiConfidence >= 80:
+                # Saves image as B64 URL that Firestore can store
+                base64Str = base64.b64encode(imageBytes).decode("utf-8")
+                updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
+            else:
+                updateFields["imageURL"] = None
+
+            updateFields["ai_metadata"] = {
+                "safe": aiSafe,
+                "freshness": aiFreshness,
+                "expiration": aiExpiration,
+                "allergens": aiAllergens,
+                "constraints": aiConstraints
+            }
 
     if reservedBy is not None:
         updateFields["reservedBy"] = reservedBy

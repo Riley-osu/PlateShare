@@ -111,10 +111,12 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
 
     listingID = generate_ListingID(organizationID, location, startTime, foodType)
 
-    pickupTime = parse_iso_datetime(startTime)
+    pickupStart = parse_iso_datetime(startTime)
     pickupEnd = parse_iso_datetime(endTime)
-    if pickupTime["status"] == 400 or pickupTime["status"] == 400:
-        return pickupTime
+    if pickupStart["status"] != 200:
+        return pickupStart
+    if pickupEnd["status"] != 200:
+        return pickupEnd
 
     try:
         db.collection("listings").document(listingID).set({
@@ -125,8 +127,8 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
             "location": location,
             "lat": lat,
             "lng": lng,
-            "pickupStart": parse_iso_datetime(startTime),
-            "pickupEnd": parse_iso_datetime(endTime),
+            "pickupStart": parse_iso_datetime(startTime)["message"],
+            "pickupEnd": parse_iso_datetime(endTime)["message"],
             # "pickupStart": {
             #     "Date": startTime,
             #     "_seconds": startTime
@@ -161,12 +163,15 @@ def delete_listing(listingID:str) -> dict:
     if db is None:
         return _response(401, "Unauthorized")
     docRef = db.collection('listings').document(listingID)
-    docRef.delete()
+    # docRef.delete()
 
 
     if not docRef.get().exists:
-        docRef = delete_message(listingID)
+        # docRef = delete_message(listingID)
+        return _response(404, "Listing not found!")
     docRef.delete()
+
+    delete_message(listingID)
     
     if docRef.get().exists:
         return _response(409, "Conflict")
@@ -196,9 +201,15 @@ def update_listing(listingID: str, updateFields: dict) -> dict:
         return UNAUTHORIZED
     try:
         if "startTime" in updateFields:
-            updateFields["startTime"] = parse_iso_datetime(updateFields["startTime"])
+            res = parse_iso_datetime(updateFields["startTime"])
+            if res["status"] != 200:
+                return res
+            updateFields["startTime"] = res["message"] 
         if "endTime" in updateFields:
-            updateFields["endTime"] = parse_iso_datetime(updateFields["endTime"])
+                res = parse_iso_datetime(updateFields["endTime"])
+                if res["status"] != 200:
+                    return res
+                updateFields["endTime"] = res["message"] 
         db.collection("listings").document(listingID).update(updateFields)
         return _response(200, "OK")
     except Exception as e:
