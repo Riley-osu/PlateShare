@@ -27,6 +27,10 @@ class ApiService {
     request.fields['quantity'] = quantity.toString();
     request.fields['pickupStart'] = pickupStart.toIso8601String();
     request.fields['pickupEnd'] = pickupEnd.toIso8601String();
+    request.fields['created_at'] = "string";
+    request.fields['location'] = "Student Union";
+    request.fields['organizationID'] = "67";
+
     //request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
 
     // Attach image file
