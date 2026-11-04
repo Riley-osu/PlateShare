@@ -243,6 +243,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       } else {
         await authService.value.signIn(email: userEmail, password: userPass);
+        
       }
 
       // Fetch user profile data from backend

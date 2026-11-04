@@ -23,10 +23,28 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    return await firebaseAuth.signInWithEmailAndPassword(
+    final credential = await firebaseAuth.signInWithEmailAndPassword(
       email: email,
       password: password,
     );
+
+
+    final user = credential.user ?? firebaseAuth.currentUser;
+
+    await user?.reload();
+
+    //Check if the user has clicked the verification link in their email
+    if (user != null && !user.emailVerified) {
+      //Sign out if not verified and throw an exception
+      await firebaseAuth.signOut();
+      throw FirebaseAuthException(
+        code: 'email-not-verified',
+        message: 'Please verify your email before signing in.',
+      );
+    } // Firebase will not allow checking verification status before sign in, so we need to sign in first and then check if the email is verified.
+
+    return credential;
+    
   }
 
 //Create account function
@@ -42,6 +60,15 @@ Future<UserCredential> createAccount({
     );
 
     final uid = credential.user!.uid;
+
+
+    //Verification with Firebase Authentication
+    if (credential.user != null) {
+      await credential.user!.sendEmailVerification();
+      await FirebaseAuth.instance.signOut();
+      return credential;
+    }
+
 
     // Create the User Profile in Firestore
     await firestore.collection('users').doc(uid).set({
@@ -66,6 +93,8 @@ Future<UserCredential> createAccount({
         'totalRatings': 0,
       });
     }
+
+    await FirebaseAuth.instance.signOut();
 
     return credential;
   }
