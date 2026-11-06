@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'main.dart';
+import 'api_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FoodListPage extends StatefulWidget {
   final List<FoodPost> posts;
+  final UserData currentUser;
 
   const FoodListPage({
     super.key,
     required this.posts,
+    required this.currentUser,
   });
 
   @override
@@ -47,11 +51,26 @@ class _FoodListPageState extends State<FoodListPage> {
     }
   }
 
+  // Allows the user to reserve a listing
   Future<void> reserveSlot(
     String listingID,
     int currentQuantity,
   ) async {
-    if (currentQuantity <= 0) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    
+    if (user == null){
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar (
+          content: Text('You must be logged in to reserve food.'),
+        ),
+      );
+
+      return;
+    }
+
+
+    //if (currentQuantity <= 0) return;
 
     try {
       await firestore.runTransaction((transaction) async {
@@ -69,14 +88,34 @@ class _FoodListPageState extends State<FoodListPage> {
 
         final quantity = data?['quantity'] as int? ?? 0;
 
+        final reservedBy = List<String>.from (
+          data?['reservedBy'] ?? [],
+        );
+
+        if (reservedBy.contains(user.uid)) {
+          throw Exception('You have already reserved this food listing.');
+        }
+
         if (quantity <= 0) {
           throw Exception('No slots are available.');
         }
 
+        reservedBy.add(user.uid);
+
         transaction.update(listingRef, {
           'quantity': quantity - 1,
+          'reservedBy': reservedBy,
         });
       });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar (
+        const SnackBar (
+          content: Text ('Food slot reserved successfully!'),
+        ),
+      );
+
     } catch (e) {
       if (!mounted) return;
 
@@ -85,6 +124,266 @@ class _FoodListPageState extends State<FoodListPage> {
           content: Text('Unable to reserve slot: $e'),
         ),
       );
+    }
+  }
+  // Function to delete a food listing
+  Future<void> deleteFoodListing(String listingID) async {
+    
+    final bool? confirmDelete = await showDialog<bool> (
+      context: context,
+      builder: (dialogContext) => AlertDialog (
+        title: const Text('Confirm Deletion'),
+        content: const Text (
+          'Are you sure you want to delete this food listing? This action cannot be undone',
+        ),
+
+        actions: [
+          TextButton (
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+
+          TextButton (
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted ||confirmDelete != true) return;
+    
+    // Buffering animation while deleting
+    showDialog<void> (
+      context: context,
+      barrierDismissible: false,
+      builder: (loadingContext) => const PopScope (
+        canPop: false,
+        child: AlertDialog (
+          content: Row (
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Expanded (
+                child: Text ('Deleting...'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+
+
+    try {
+      await ApiService.deleteListing(
+        listingId: listingID,
+      );
+
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar (
+        const SnackBar (
+          content: Text('Food listing deleted successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar (
+        SnackBar (
+          content: Text ('Failed to delete food listing: $e'),
+        ),
+      );
+    }
+  }
+  // Function to edit a food listing
+  Future<void> editFoodListing(
+    String listingID,
+    String currentFoodName,
+    String currentDescription,
+    int currentQuantity,
+  ) async {
+
+    final foodNameController =
+      TextEditingController(text: currentFoodName);
+
+    final descriptionController =
+      TextEditingController(text: currentDescription);
+
+    final quantityController =
+      TextEditingController(text: currentQuantity.toString());
+
+    bool isSaving = false;
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return PopScope(
+                canPop: !isSaving,
+                child: AlertDialog(
+                  title: const Text('Edit Food Listing'),
+
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: foodNameController,
+                          enabled: !isSaving,
+                          decoration: const InputDecoration(
+                            labelText: 'Food Name',
+                          ),
+                        ),
+
+                        TextField(
+                          controller: descriptionController,
+                          enabled: !isSaving,
+                          decoration: const InputDecoration(
+                            labelText: 'Description',
+                          ),
+                          maxLines: 3,
+                        ),
+
+                        TextField(
+                          controller: quantityController,
+                          enabled: !isSaving,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Available Slots',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  actions: [
+                    TextButton(
+                      onPressed: isSaving
+                          ? null
+                          : () {
+                              Navigator.pop(dialogContext);
+                            },
+                      child: const Text('Cancel'),
+                    ),
+
+                    ElevatedButton(
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final foodName =
+                                  foodNameController.text.trim();
+
+                              final description =
+                                  descriptionController.text.trim();
+
+                              final quantity = int.tryParse(
+                                quantityController.text.trim(),
+                              );
+
+                              if (foodName.isEmpty ||
+                                  description.isEmpty ||
+                                  quantity == null ||
+                                  quantity < 0) {
+                                ScaffoldMessenger.of(dialogContext)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Enter a food name, description, and valid quantity.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                            // Disable Save and show loading animation
+                              setDialogState(() {
+                                isSaving = true;
+                              });
+
+                              try {
+                                await ApiService.updateListing(
+                                  listingId: listingID,
+                                  foodName: foodName,
+                                  description: description,
+                                  quantity: quantity,
+                                );
+
+                                if (!mounted) return;
+
+                                if (dialogContext.mounted) {
+                                  Navigator.of(dialogContext).pop();
+                                }
+
+                                ScaffoldMessenger.of(this.context)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Food listing updated successfully.',
+                                    ),
+                                  ),
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+
+                                ScaffoldMessenger.of(this.context)
+                                    .showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Failed to update food listing: $e',
+                                    ),
+                                  ),
+                                );
+                              } finally {
+                                if (dialogContext.mounted) {
+                                  setDialogState(() {
+                                    isSaving = false;
+                                  });
+                                }
+                              }
+                            },
+
+                      child: isSaving
+                          ? const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text('Saving Changes...'),
+                              ],
+                            )
+                          : const Text('Save'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      await Future<void>.delayed(
+        const Duration(milliseconds: 300),
+      );
+
+      foodNameController.dispose();
+      descriptionController.dispose();
+      quantityController.dispose();
     }
   }
 
@@ -149,6 +448,12 @@ class _FoodListPageState extends State<FoodListPage> {
             final organizationID =
                 (listing['organizationID'] ?? '').toString();
 
+            final canManagePost = 
+                widget.currentUser.isApprovedOrg && 
+                widget.currentUser.organizationID != null &&
+                widget.currentUser.organizationID!.isNotEmpty &&
+                organizationID == widget.currentUser.organizationID;
+
             final pickupStart =
                 (listing['pickupStart'] as Timestamp?)?.toDate() ??
                     DateTime.now();
@@ -196,46 +501,81 @@ class _FoodListPageState extends State<FoodListPage> {
                   children: [
                     // --- ORGANIZATION & FOOD TYPE ---
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               FutureBuilder<String>(
-                                future: getOrganizationName(
-                                  organizationID,
-                                ),
+                                future: getOrganizationName(organizationID),
                                 builder: (context, orgSnapshot) {
                                   return Text(
-                                    orgSnapshot.data ??
-                                        "Loading organization...",
+                                    orgSnapshot.data ?? "Loading organization...",
                                     style: const TextStyle(
                                       color: Colors.orangeAccent,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
+
                                     overflow: TextOverflow.ellipsis,
+              
                                   );
                                 },
+                             ),
+                            
+                            const SizedBox(height: 2),
+                            Text(
+                              foodType,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                foodType,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
+                              
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+
+                      // Only the organization can see this menu
+                      if (canManagePost)
+                      PopupMenuButton<String>(
+                        icon: const Icon(
+                          Icons.more_vert,
+                          color: Colors.white,
+                        ),
+        
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            editFoodListing(
+                              listingDoc.id,
+                              foodType,
+                              description,
+                              remainingSlots,
+                            );
+                            
+                          } else if (value == 'delete') {
+                            deleteFoodListing(listingDoc.id);
+                          }
+                        },
+        
+                        itemBuilder: (context) => const [
+                          PopupMenuItem<String>(
+                            value: 'edit',
+                            child: Text('Edit'),
+                          ),
+          
+                          PopupMenuItem<String>(
+                            value: 'delete',
+                            child: Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    ],
                     ),
+
                     const SizedBox(height: 8),
 
                     // --- DATE & TIME SCHEDULE ROW ---

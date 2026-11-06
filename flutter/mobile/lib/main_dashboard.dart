@@ -70,7 +70,7 @@ class _MainDashboardState extends State<MainDashboard> {
       body: Builder(
         builder: (context) {
           if (_selectedIndex == 0) {
-            return FoodListPage(posts: globalPostsList);
+            return FoodListPage(posts: globalPostsList, currentUser: widget.currentUser);
           }
           if (_selectedIndex == 1) {
             return const MapPage();
