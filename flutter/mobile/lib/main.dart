@@ -251,6 +251,8 @@ class _AuthScreenState extends State<AuthScreen> {
       if (loggedUser == null) {
         throw Exception("User data not found after authentication.");
       }
+      
+
       if (loggedUser.status != 'active') {
         await authService.value.signOut();
         throw Exception("Your account is not active.");

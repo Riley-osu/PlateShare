@@ -118,7 +118,7 @@ async def create_listing(
         newListing = firebaseHelper.Listing(
             foodType = foodName,
             description = description,
-            maxReservations = 1,
+            maxReservations = quantity,
             location = location,
             organizationID = organizationID,
             startTime = pickupStart,
