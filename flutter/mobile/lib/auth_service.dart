@@ -48,56 +48,56 @@ class AuthService {
   }
 
 //Create account function
+
 Future<UserCredential> createAccount({
-    required String email,
-    required String password,
-    bool isOrganization = false,
-    String? orgName,
-  }) async {
-    final credential = await firebaseAuth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  required String email,
+  required String password,
+  bool isOrganization = false,
+  String? orgName,
+}) async {
+  // Create user in Firebase Authentication
+  final credential =
+      await firebaseAuth.createUserWithEmailAndPassword(
+    email: email,
+    password: password,
+  );
 
-    final uid = credential.user!.uid;
+  final uid = credential.user!.uid;
 
+  // Create user profile in Firestore
+  await firestore.collection('users').doc(uid).set({
+    'admin': false,
+    'createdAt': FieldValue.serverTimestamp(),
+    'email': email,
+    'firstName': '',
+    'lastName': '',
+    'role': isOrganization ? 'organization' : 'student',
+    'status': 'active',
+    'username': '',
+  });
 
-    //Verification with Firebase Authentication
-    if (credential.user != null) {
-      await credential.user!.sendEmailVerification();
-      await FirebaseAuth.instance.signOut();
-      return credential;
-    }
-
-
-    // Create the User Profile in Firestore
-    await firestore.collection('users').doc(uid).set({
-      'admin': false,
+  // Create organization profile if applicable
+  if (isOrganization) {
+    await firestore.collection('organizations').add({
+      'averageRating': 0,
       'createdAt': FieldValue.serverTimestamp(),
-      'email': email,
-      'firstName': '',
-      'lastName': '',
-      'role': isOrganization ? 'organization' : 'student',
-      'status': 'active',
-      'username': '',
+      'description': '',
+      'organizationName': orgName ?? '',
+      'ownerID': uid,
+      'status': 'pending',
+      'totalRatings': 0,
     });
-
-    if (isOrganization) {
-      await firestore.collection('organizations').add({
-        'averageRating': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-        'description': '',
-        'organizationName': orgName ?? '',
-        'ownerID': uid,
-        'status': 'pending',
-        'totalRatings': 0,
-      });
-    }
-
-    await FirebaseAuth.instance.signOut();
-
-    return credential;
   }
+
+  // Send email verification after creating profiles
+  await credential.user!.sendEmailVerification();
+
+  // Sign out until email is verified
+  await firebaseAuth.signOut();
+
+  return credential;
+}
+
   
   // Get User Profile. 
   Future<UserData?> getUserData() async {

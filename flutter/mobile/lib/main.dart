@@ -234,20 +234,39 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       // Execute sign up or sign in based on the current page mode
-      if (isSignUpPage) {
-        await authService.value.createAccount(
-          email: userEmail, 
-          password: userPass, 
-          isOrganization: isOrgSwitch, 
-          orgName: isOrgSwitch ? o1.text.trim() : null
-        );
-      } else {
-        await authService.value.signIn(email: userEmail, password: userPass);
-        
-      }
+      
+if (isSignUpPage) {
+  await authService.value.createAccount(
+    email: userEmail,
+    password: userPass,
+    isOrganization: isOrgSwitch,
+    orgName: isOrgSwitch ? o1.text.trim() : null,
+  );
+
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text(
+        'Account created! Please verify your email before logging in.',
+      ),
+    ),
+  );
+
+  return;
+} else {
+  await authService.value.signIn(
+    email: userEmail,
+    password: userPass,
+  );
+}
+
+// Only retrieve profile after successful login
+final loggedUser = await authService.value.getUserData();
+
 
       // Fetch user profile data from backend
-      final loggedUser = await authService.value.getUserData();
+      //final loggedUser = await authService.value.getUserData();
 
       if (loggedUser == null) {
         throw Exception("User data not found after authentication.");
