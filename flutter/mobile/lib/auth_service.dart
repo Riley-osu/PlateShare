@@ -23,52 +23,81 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    return await firebaseAuth.signInWithEmailAndPassword(
+    final credential = await firebaseAuth.signInWithEmailAndPassword(
       email: email,
       password: password,
     );
+
+
+    final user = credential.user ?? firebaseAuth.currentUser;
+
+    await user?.reload();
+
+    //Check if the user has clicked the verification link in their email
+    if (user != null && !user.emailVerified) {
+      //Sign out if not verified and throw an exception
+      await firebaseAuth.signOut();
+      throw FirebaseAuthException(
+        code: 'email-not-verified',
+        message: 'Please verify your email before signing in.',
+      );
+    } // Firebase will not allow checking verification status before sign in, so we need to sign in first and then check if the email is verified.
+
+    return credential;
+    
   }
 
 //Create account function
+
 Future<UserCredential> createAccount({
-    required String email,
-    required String password,
-    bool isOrganization = false,
-    String? orgName,
-  }) async {
-    final credential = await firebaseAuth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  required String email,
+  required String password,
+  bool isOrganization = false,
+  String? orgName,
+}) async {
+  // Create user in Firebase Authentication
+  final credential =
+      await firebaseAuth.createUserWithEmailAndPassword(
+    email: email,
+    password: password,
+  );
 
-    final uid = credential.user!.uid;
+  final uid = credential.user!.uid;
 
-    // Create the User Profile in Firestore
-    await firestore.collection('users').doc(uid).set({
-      'admin': false,
+  // Create user profile in Firestore
+  await firestore.collection('users').doc(uid).set({
+    'admin': false,
+    'createdAt': FieldValue.serverTimestamp(),
+    'email': email,
+    'firstName': '',
+    'lastName': '',
+    'role': isOrganization ? 'organization' : 'student',
+    'status': 'active',
+    'username': '',
+  });
+
+  // Create organization profile if applicable
+  if (isOrganization) {
+    await firestore.collection('organizations').add({
+      'averageRating': 0,
       'createdAt': FieldValue.serverTimestamp(),
-      'email': email,
-      'firstName': '',
-      'lastName': '',
-      'role': isOrganization ? 'organization' : 'student',
-      'status': 'active',
-      'username': '',
+      'description': '',
+      'organizationName': orgName ?? '',
+      'ownerID': uid,
+      'status': 'pending',
+      'totalRatings': 0,
     });
-
-    if (isOrganization) {
-      await firestore.collection('organizations').add({
-        'averageRating': 0,
-        'createdAt': FieldValue.serverTimestamp(),
-        'description': '',
-        'organizationName': orgName ?? '',
-        'ownerID': uid,
-        'status': 'pending',
-        'totalRatings': 0,
-      });
-    }
-
-    return credential;
   }
+
+  // Send email verification after creating profiles
+  await credential.user!.sendEmailVerification();
+
+  // Sign out until email is verified
+  await firebaseAuth.signOut();
+
+  return credential;
+}
+
   
   // Get User Profile. 
   Future<UserData?> getUserData() async {

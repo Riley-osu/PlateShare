@@ -72,8 +72,7 @@ async def create_listing(
     location: str = Form(...),
     organizationID: str = Form(...),
     pickupStart: str = Form(...),
-    pickupEnd: str = Form(...),
-    quantity: int = Form(1),
+    quantity: int = Form(...),
     reservationCount: int = Form(1),
     status: str = Form("available")
 
@@ -128,7 +127,7 @@ async def create_listing(
         newListing = firebaseHelper.Listing(
             foodType = foodName,
             description = description,
-            maxReservations = 1,
+            maxReservations = quantity,
             location = location,
             organizationID = organizationID,
             startTime = pickupStart,
