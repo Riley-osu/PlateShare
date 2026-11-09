@@ -1,6 +1,6 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from dataclasses import dataclass, field
 import math
@@ -189,12 +189,6 @@ def edit_listing_location(listingID: str, location: str, lat:float, lng:float) -
         return _response(200, "OK")
     except Exception as e:
         return _response(400, str(e))
-    
-# def edit_listing(listingID:str, field:str, data) -> dict:
-#     """Edit a field on a listing."""
-#     if field in ("location", "lat", "lng"):
-#         return _response(400, "use edit_listing_location so coordinates are synced")
-#     return edit_database_field("listings", listingID, field, data)
 
 def update_listing(listingID: str, updateFields: dict) -> dict:
     if db is None:
@@ -383,6 +377,10 @@ class Listing:
             raise ValueError("maxReservations must be at least 1")
         if parse_iso_datetime(self.endTime)["message"] <= parse_iso_datetime(self.startTime)["message"]:
             raise ValueError("endTime must be after startTime")
+
+        monthFromNow = datetime.now(timezone.utc) + timedelta(days=30)
+        if parse_iso_datetime(self.endTime)["message"] > monthFromNow: 
+            raise ValueError("endTime set too far into the future")
         
     @property
     def listingID(self) -> str:

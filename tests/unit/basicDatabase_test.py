@@ -1,7 +1,5 @@
-import sys
 import pytest
 
-sys.path.insert(0, "../../Software Engineering")
 import firebaseHelper as db_module
 
 import pytest
@@ -21,7 +19,6 @@ from firebaseHelper import (
     add_listing,
     delete_listing,
     edit_listing_location,
-    edit_listing,
     _adjust_spots,
     add_reservation,
     remove_reservation,
@@ -167,21 +164,6 @@ def test_edit_listing_location_success(mock_db):
     mock_db.collection.return_value.document.return_value.update.assert_called_with(
         {"location": "Room 101", "lat": 36.12, "lng": -97.06}
     )
-
-
-def test_edit_listing_blocks_location_fields(mock_db):
-    for protected_field in ("location", "lat", "lng"):
-        res = edit_listing("listing123", protected_field, "new_val")
-        assert res == {
-            "status": 400,
-            "message": "use edit_listing_location so coordinates are synced",
-        }
-
-
-def test_edit_listing_valid_field(mock_db):
-    res = edit_listing("listing123", "description", "Updated description")
-    assert res == {"status": 200, "message": "OK"}
-
 
 def test_add_reservation_success(mock_db, monkeypatch):
     # Bypass @firestore.transactional wrapper to test reservation logic directly
