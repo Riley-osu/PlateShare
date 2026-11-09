@@ -34,11 +34,12 @@ def analyze_food(image:bytes) -> dict:
 
         Return ONLY a JSON object with the following keys:
         {
-            "safe": true or false (safe to eat or not)
+            "food_confidence": 0-100 (confidence that image contains food, 0 being not food or NSFW, 100 being definitely food),
+            "safe": true or false (safe to eat or not),
             "freshness": 1-10 (10 being perfectly fresh and 1 being completely spoiled),
             "expiration":  0 or more days until expiration,
             "allergens": ["list", "of", "possible", "allergens", "contained", "within", "food"],
-            "contraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
+            "constraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
         }
     """
 
@@ -87,10 +88,12 @@ def analyze_food(image:bytes) -> dict:
             content = content[4:]
         content.strip
 
+    print(json.loads(content))
     try:
         return json.loads(content)
     except json.JSONDecodeError as e:
         print("JSON decoding failed: {e}")
+
 
 # Function for local testing
 def test_all():

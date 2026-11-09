@@ -5,3 +5,4 @@ env/
 firebase_admin.json
 .vscode/
 .env
+tester.dart

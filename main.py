@@ -11,7 +11,8 @@ import firebaseHelper
 from plateAI import analyze_food
 from fastapi.middleware.cors import CORSMiddleware
 import base64
-from geoCoding import geocodeAddress, geocodeError
+from geoCoding import *
+from typing import Optional
 
 app = FastAPI(title="PlateShare")
 
@@ -65,12 +66,11 @@ async def create_listing(
     
     # User Fields 
     foodName: str = Form(...),
-    created_at: str = Form(...),
     description: str = Form(...),
-    image: UploadFile = File(...),
+    createdAt: str = Form(...),
+    image: Optional[UploadFile] = None,
     location: str = Form(...),
     organizationID: str = Form(...),
-    pickupEnd: str = Form(...),
     pickupStart: str = Form(...),
     quantity: int = Form(...),
     reservationCount: int = Form(1),
@@ -78,11 +78,8 @@ async def create_listing(
 
 ):
 
-    # Ensures image was properly loaded
-    imageBytes = await image.read()
-    # Otherwise, throw exception
-    if not imageBytes:
-        raise HTTPException(status_code = 400, detail = "Uploaded image is empty")
+
+    # createdAt = datetime.now(timezone.utc).isoformat()
 
     """Geocodes the provided address"""
     try:
@@ -90,28 +87,40 @@ async def create_listing(
     except geocodeError as e:
         raise HTTPException(status_code = 400, detail = str(e))
     
-    # AI Metadata
+    # AI Metadata Default Fields
     aiSafe = True
     aiFreshness = 10
     aiExpiration = 0
     aiAllergens = []
     aiConstraints = []
+    aiConfidence = 100
 
-    # Runs image through PlateAI (Ollama Cloud) for analysis 
-    try:
-        aiResponse = analyze_food(imageBytes)
-        aiSafe = aiResponse.get("safe", True)
-        aiFreshness = aiResponse.get("freshness", 10)
-        aiExpiration = aiResponse.get("expiration", 0)
-        aiAllergens = aiResponse.get("allergens", [])
-        aiConstraints = aiResponse.get("constraints", [])
-    except Exception as e:
-        # print(e)
-        pass
+    imageURL = None
 
-    # Saves image as B64 URL that Firestore can store
-    base64Str = base64.b64encode(imageBytes).decode("utf-8")
-    imageURL = f"data:image/jpeg;base64,{base64Str}"
+    # Ensures image was properly loaded if inputted
+    if image is not None:
+        imageBytes = await image.read()
+
+        # Runs image through PlateAI (Ollama Cloud) for analysis
+        if imageBytes:
+            try:
+                aiResponse = analyze_food(imageBytes)
+                aiSafe = aiResponse.get("safe", True)
+                aiFreshness = aiResponse.get("freshness", 10)
+                aiExpiration = aiResponse.get("expiration", 0)
+                aiAllergens = aiResponse.get("allergens", [])
+                aiConstraints = aiResponse.get("constraints", [])
+                aiConfidence = aiResponse.get("food_confidence", 0)
+            except Exception as e:
+                # print(e)
+                pass
+
+            if aiConfidence >= 80:
+                # Saves image as B64 URL that Firestore can store
+                base64Str = base64.b64encode(imageBytes).decode("utf-8")
+                imageURL = f"data:image/jpeg;base64,{base64Str}"
+            else:
+                imageURL = None
 
     # Attempts to create listing using helper function dataclass
     try:
@@ -130,7 +139,8 @@ async def create_listing(
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
             allergensList = aiAllergens,
-            constraintsList = aiConstraints  
+            constraintsList = aiConstraints,
+            reservedBy = ""
         )
     except Exception as e:
         raise e
@@ -155,3 +165,106 @@ async def create_listing(
         }
     }
 
+
+@app.delete("/api/listings/{listingID}")
+async def delete_listing(listingID: str):
+    
+    apiResponse = firebaseHelper.delete_listing((listingID))
+
+    status = apiResponse.get("status", 400)
+    if status not in (200, 204):
+        raise HTTPException(
+            status_code = apiResponse.get("status", 400),
+            detail = apiResponse.get("message", "Delete failed")
+        )
+    return {"status": "success", "message": f"Listing {listingID} deleted"}
+
+@app.patch("/api/listings/{listingID}")
+async def update_listing(
+    listingID: str,
+    foodName: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    quantity: Optional[int] = Form(None),
+    location: Optional[str] = Form(None),
+    pickupStart: Optional[str] = Form(None),
+    pickupEnd: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    reservedBy: Optional[str] = Form(None)
+):
+    updateFields = {}
+
+    if foodName is not None:
+        updateFields["foodName"] = foodName
+    if description is not None:
+        updateFields["description"] = description
+    if quantity is not None:
+        updateFields["maxReservations"] = quantity
+    if location is not None:
+        updateFields["location"] = location
+        try:
+            lat, lng = await geocodeAddress(location)
+            updateFields["lat"] = lat
+            updateFields["lng"] = lng
+        except Exception as e:
+            raise HTTPException(status_code = 400, detail = str(e))
+    if pickupStart is not None:
+        updateFields["startTime"] = pickupStart
+    if pickupEnd is not None:
+        updateFields["endTime"] = pickupEnd
+    if status is not None:
+        updateFields["status"] = status
+
+
+    imageURL = None
+
+    # Ensures image was properly loaded if inputted
+    if image is not None:
+        imageBytes = await image.read()
+
+        # Runs image through PlateAI (Ollama Cloud) for analysis
+        if imageBytes:
+            # AI Metadata Default Fields
+            aiSafe = True
+            aiFreshness = 10
+            aiExpiration = 0
+            aiAllergens = []
+            aiConstraints = []
+            aiConfidence = 100
+
+            try:
+                aiResponse = analyze_food(imageBytes)
+                aiSafe = aiResponse.get("safe", True)
+                aiFreshness = aiResponse.get("freshness", 10)
+                aiExpiration = aiResponse.get("expiration", 0)
+                aiAllergens = aiResponse.get("allergens", [])
+                aiConstraints = aiResponse.get("constraints", [])
+                aiConfidence = aiResponse.get("food_confidence", 0)
+            except Exception:
+                pass
+
+            if aiConfidence >= 80:
+                # Saves image as B64 URL that Firestore can store
+                base64Str = base64.b64encode(imageBytes).decode("utf-8")
+                updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
+            else:
+                updateFields["imageURL"] = None
+
+            updateFields["ai_metadata"] = {
+                "safe": aiSafe,
+                "freshness": aiFreshness,
+                "expiration": aiExpiration,
+                "allergens": aiAllergens,
+                "constraints": aiConstraints
+            }
+
+    if reservedBy is not None:
+        updateFields["reservedBy"] = reservedBy
+
+    if not updateFields:
+        raise HTTPException(status_code = 400, detail = "No fields were provided.")
+
+    apiResponse = firebaseHelper.update_listing(listingID, updateFields)
+    if apiResponse.get("status", 400) not in (200, 204):
+        raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
+    return {"status": "success", "message": f"Listing {listingID} updated successfully."}
