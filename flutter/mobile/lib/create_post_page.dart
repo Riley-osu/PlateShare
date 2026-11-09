@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'main.dart';
+import 'api_service.dart';
 
 class CreatePostPage extends StatefulWidget {
   final UserData currentUser;
@@ -23,6 +24,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   var foodTypeController = TextEditingController();
   var descController = TextEditingController();
   var slotsController = TextEditingController();
+  var locationController = TextEditingController();
 
   DateTime selectedDate = DateTime.now();
   TimeOfDay startTime = const TimeOfDay(hour: 12, minute: 0);
@@ -47,66 +49,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
   }
 
   // NEW: Save the food listing to Firestore
-  Future<String> _savePostToFirebase({
-    required String foodName,
-    required String description,
-    required int quantity,
-    required DateTime pickupStart,
-    required DateTime pickupEnd,
-  }) async {
-    final user = firebaseAuth.currentUser;
-
-    if (user == null) {
-      throw Exception('You must be logged in to create a post.');
-    }
-
-    // Find the organization belonging to this user.
-    final orgQuery = await firestore
-        .collection('organizations')
-        .where('ownerID', isEqualTo: user.uid)
-        .limit(1)
-        .get();
-
-    if (orgQuery.docs.isEmpty) {
-      throw Exception('Organization not found in Firebase.');
-    }
-
-    final organization = orgQuery.docs.first;
-    final orgData = organization.data();
-
-    // Only approved organizations can publish food posts.
-    if (orgData['status'] != 'active') {
-      throw Exception(
-        'Your organization must be approved before posting.',
-      );
-    }
-
-    // Use the organization's saved address if available, if not leave it empty.
-    final location =
-        (orgData['address'] ?? '').toString();
-
-    // Firestore stores the image URL
-    const String imageURL = '';
-
-    final document = await firestore
-        .collection('listings')
-        .add({
-      'createdAt': FieldValue.serverTimestamp(),
-      'description': description,
-      'foodName': foodName,
-      'imageURL': imageURL,
-      'location': location,
-      'organizationID': organization.id,
-      'pickupEnd': Timestamp.fromDate(pickupEnd),
-      'pickupStart': Timestamp.fromDate(pickupStart),
-      'quantity': quantity,
-      'status': 'available',
-    });
-
-    // Return the real Firestore document ID.
-    return document.id;
-  }
-
+  
   // Publish to Firebase and update the existing local list
   Future<void> _publishPost() async {
     if (isPublishing) return;
@@ -115,9 +58,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
-    final quantity = int.parse(slotsController.text);
 
-    if (quantity <= 0) {
+    if (int.parse(slotsController.text) <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Available Slots must be greater than zero.'),
@@ -144,15 +86,55 @@ class _CreatePostPageState extends State<CreatePostPage> {
     setState(() {
       isPublishing = true;
     });
-
+    // Sends food post information to the API using the ApiService.createPost().
     try {
-      final postID = await _savePostToFirebase(
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        throw Exception('You must be logged in to create a post.');
+      }
+
+      final orgQuery = await FirebaseFirestore.instance
+          .collection('organizations')
+          .where('ownerID', isEqualTo: user.uid)
+          .limit(1)
+          .get();
+    
+
+      if (orgQuery.docs.isEmpty) {
+        throw Exception('No organization found for the current user.');
+      }
+
+      if (orgQuery.docs.first.data()['status'] != 'active') {
+        throw Exception('Your organization has not beenapproved to create posts.');
+      }
+
+      final organizationID = orgQuery.docs.first.id;
+      
+      // Temporarily disabled
+      if (pickedImage == null) { 
+        throw Exception('Please select an image for the post.');
+      }
+
+      final response = await ApiService.createPost ( 
         foodName: foodTypeController.text.trim(),
         description: descController.text.trim(),
-        quantity: quantity,
+        quantity: int.parse(slotsController.text),
         pickupStart: pickupStart,
         pickupEnd: pickupEnd,
+        organizationID: organizationID,
+        location: locationController.text.trim(),
+        imageFile: pickedImage!, // should be pickedImage! but temporarily allowing null for testing purposes
       );
+
+
+      final postID = (response['listingID'] ??
+                      response['listingId'] ??
+                      response['id'])?.toString();
+
+      if (postID == null || postID.isEmpty) {
+        throw Exception('API response did not contain a listing ID.');
+      }
 
       if (!mounted) return;
 
@@ -166,7 +148,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         date: selectedDate,
         startTime: startTime,
         endTime: endTime,
-        remainingSlots: quantity,
+        remainingSlots: int.parse(slotsController.text),
       );
 
       widget.onPostCreated(newPost);
@@ -243,6 +225,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     foodTypeController.dispose();
     descController.dispose();
     slotsController.dispose();
+    locationController.dispose();
     super.dispose();
   }
 
@@ -353,6 +336,23 @@ class _CreatePostPageState extends State<CreatePostPage> {
                 return null;
               },
             ),
+
+            const SizedBox(height: 15),
+            TextFormField(
+              controller: locationController,
+              decoration: const InputDecoration(
+                labelText: "Pickup Location",
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) {
+                  return "Pickup loaction is required";
+                }
+
+                return null;
+              },
+            ),
+
             const SizedBox(height: 20),
 
             // --- DAY & TIME SECTION ---
@@ -406,15 +406,33 @@ class _CreatePostPageState extends State<CreatePostPage> {
             ),
             const SizedBox(height: 25),
 
-            // --- PUBLISH BUTTON ---
+            // --- PUBLISH BUTTON with Buffer ---
             ElevatedButton(
               onPressed: isPublishing ? null : _publishPost,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-             child: const Text(
-               "Publish Post",
-               style: TextStyle(fontSize: 16),
+
+              child: isPublishing
+              ? const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox (
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator (
+                      strokeWidth: 2,
+                    ),
+                  ),
+
+                  SizedBox (width: 10),
+                  Text ("Publishing...", style: TextStyle(fontSize: 16),
+                  ),
+                ],
+              )
+
+              : const Text (
+                "Publish Post", style: TextStyle(fontSize: 16),
               ),
             ),
           ],

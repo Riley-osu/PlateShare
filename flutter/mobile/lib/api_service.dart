@@ -14,7 +14,9 @@ class ApiService {
     required int quantity,
     required DateTime pickupStart,
     required DateTime pickupEnd,
-    required File imageFile,
+    required String location,
+    required String organizationID,
+    required File imageFile, // This should be required File imageFile, but it will be null for now.
   }) async {
     final url = Uri.parse('$baseUrl/api/listings');
 
@@ -27,9 +29,11 @@ class ApiService {
     request.fields['quantity'] = quantity.toString();
     request.fields['pickupStart'] = pickupStart.toIso8601String();
     request.fields['pickupEnd'] = pickupEnd.toIso8601String();
-    request.fields['created_at'] = "string";
-    request.fields['location'] = "Student Union";
-    request.fields['organizationID'] = "67";
+
+    request.fields['createdAt'] = DateTime.now().toUtc().toIso8601String();
+    request.fields['location'] = location;
+    request.fields['organizationID'] = organizationID;
+
 
     //request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
 
@@ -44,6 +48,7 @@ class ApiService {
       filename: imageFile.path.split('/').last,
     );
     request.files.add(multipartFile);
+    
 
     // Send the request
     final streamedResponse = await request.send();
