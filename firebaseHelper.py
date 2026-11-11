@@ -5,8 +5,6 @@ from pathlib import Path
 from dataclasses import dataclass, field
 import math
 from typing import List, Optional, Any
-from fastapi import HTTPException
-import uuid
 
 def init_firestore():
     if not firebase_admin._apps:
