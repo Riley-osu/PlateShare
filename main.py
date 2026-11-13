@@ -57,9 +57,6 @@ def test_messages():
     except Exception as e:
         return {"status":404, "message":str(e)}
 
-    
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 @app.post("/api/listings")
 async def create_listing(
@@ -67,13 +64,13 @@ async def create_listing(
     # User Fields 
     foodName: str = Form(...),
     description: str = Form(...),
-    createdAt: str = Form(...),
+    # createdAt: str = Form(...),
     image: Optional[UploadFile] = None,
     location: str = Form(...),
     organizationID: str = Form(...),
     pickupStart: str = Form(...),
-    quantity: int = Form(...),
-    reservationCount: int = Form(1),
+    pickupEnd: str = Form(...),
+    quantity: int = Form(1),
     status: str = Form("available")
 
 ):
@@ -86,6 +83,10 @@ async def create_listing(
         lat,lng = await geocodeAddress(location)
     except geocodeError as e:
         raise HTTPException(status_code = 400, detail = str(e))
+
+    imageBytes = await image.read()
+    if not imageBytes:
+        raise HTTPException(status_code = 400, detail = "Image file is empty.")
     
     # AI Metadata Default Fields
     aiSafe = True
@@ -94,33 +95,28 @@ async def create_listing(
     aiAllergens = []
     aiConstraints = []
     aiConfidence = 100
+    aiDescription = "N/A"
 
-    imageURL = None
+    
+    try:
+        aiResponse = analyze_food(imageBytes)
+        aiSafe = aiResponse.get("safe", True)
+        aiFreshness = aiResponse.get("freshness", 10)
+        aiExpiration = aiResponse.get("expiration", 0)
+        aiAllergens = aiResponse.get("allergens", [])
+        aiConstraints = aiResponse.get("constraints", [])
+        aiConfidence = aiResponse.get("food_confidence", 0)
+        aiDescription = aiResponse.get("description", "N/A")
+    except Exception as e:
+        # print(e)
+        pass
 
-    # Ensures image was properly loaded if inputted
-    if image is not None:
-        imageBytes = await image.read()
-
-        # Runs image through PlateAI (Ollama Cloud) for analysis
-        if imageBytes:
-            try:
-                aiResponse = analyze_food(imageBytes)
-                aiSafe = aiResponse.get("safe", True)
-                aiFreshness = aiResponse.get("freshness", 10)
-                aiExpiration = aiResponse.get("expiration", 0)
-                aiAllergens = aiResponse.get("allergens", [])
-                aiConstraints = aiResponse.get("constraints", [])
-                aiConfidence = aiResponse.get("food_confidence", 0)
-            except Exception as e:
-                # print(e)
-                pass
-
-            if aiConfidence >= 80:
-                # Saves image as B64 URL that Firestore can store
-                base64Str = base64.b64encode(imageBytes).decode("utf-8")
-                imageURL = f"data:image/jpeg;base64,{base64Str}"
-            else:
-                imageURL = None
+    if aiConfidence >= 80:
+        # Saves image as B64 URL that Firestore can store
+        base64Str = base64.b64encode(imageBytes).decode("utf-8")
+        imageURL = f"data:image/jpeg;base64,{base64Str}"
+    else:
+        imageURL = None
 
     # Attempts to create listing using helper function dataclass
     try:
@@ -140,6 +136,7 @@ async def create_listing(
             expirationDays = aiExpiration,
             allergensList = aiAllergens,
             constraintsList = aiConstraints,
+            aiDescription = aiDescription,
             reservedBy = ""
         )
     except Exception as e:
@@ -161,7 +158,8 @@ async def create_listing(
             "freshness": aiFreshness,
             "expiration": aiExpiration,
             "allergens": aiAllergens,
-            "constraints": aiConstraints
+            "constraints": aiConstraints,
+            "aiDescription": aiDescription
         }
     }
 
@@ -268,3 +266,6 @@ async def update_listing(
     if apiResponse.get("status", 400) not in (200, 204):
         raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
     return {"status": "success", "message": f"Listing {listingID} updated successfully."}
+    
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

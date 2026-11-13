@@ -37,7 +37,7 @@ class ApiService {
 
     //request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
 
-    // Attach image file
+    // Attach image file  
     final imageStream = http.ByteStream(imageFile.openRead());
     final imageLength = await imageFile.length();
 
