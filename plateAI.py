@@ -40,6 +40,7 @@ def analyze_food(image:bytes) -> dict:
             "expiration":  0 or more days until expiration,
             "allergens": ["list", "of", "possible", "allergens", "contained", "within", "food"],
             "constraints": ["list", "of", "possible", "religious", "or", "dietary", "restrictions"],
+            "description": brief desccription of the food
         }
     """
 
