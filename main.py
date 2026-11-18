@@ -1,11 +1,4 @@
-import array
-import collections
-import os
-from google.cloud.firestore_v1 import collection, document
 import uvicorn
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
 from fastapi import *
 import firebaseHelper
 from plateAI import analyze_food
@@ -70,7 +63,8 @@ async def create_listing(
     organizationID: str = Form(...),
     pickupStart: str = Form(...),
     pickupEnd: str = Form(...),
-    quantity: int = Form(1),
+    quantity: int = Form(...),
+    reservationCount: int = Form(1),
     status: str = Form("available")
 
 ):
