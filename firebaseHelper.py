@@ -262,17 +262,19 @@ def _time_until(listingID:str, field:str) -> dict:
         # minutes = max(math.cell(delta.total_seconds() / 60),0)
         # return _response(200,minutes)
         docRef = db.collection("listings").document(listingID).get()
-        if not docRef.exists:
+
+        if not docRef.exists: 
             return _response(404, "Listing not found")
 
-        targetTime = str(docRef.to_dict().get(field))
-        if isinstance(targetTime, str):
-            parsed_res = parse_iso_datetime(targetTime)
-            if parsed_res["status"] != 200:
-                return parsed_res
-            targetTime = parse_iso_datetime(targetTime)
-
-        timeDelta = targetTime["message"] - datetime.now(timezone.utc)
+        targetTime = docRef.to_dict().get(field)
+        if targetTime is None:
+            return _response(400, f"Field '{field}' is missing from the listing")
+        
+        parsed_res = parse_iso_datetime(str(targetTime))
+        if parsed_res["status"] != 200:
+            return parsed_res
+        
+        timeDelta = parsed_res["message"] - datetime.now(timezone.utc)
         mins = max(math.ceil(timeDelta.total_seconds() / 60), 0)
         return _response(200, mins)
     except Exception as e:

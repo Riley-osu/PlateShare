@@ -193,7 +193,7 @@ async def update_listing(
     if description is not None:
         updateFields["description"] = description
     if quantity is not None:
-        updateFields["maxReservations"] = quantity
+        updateFields["quanitity"] = quantity
     if location is not None:
         updateFields["location"] = location
         try:
@@ -203,7 +203,7 @@ async def update_listing(
         except Exception as e:
             raise HTTPException(status_code = 400, detail = str(e))
     if pickupStart is not None:
-        updateFields["startTime"] = pickupStart
+        updateFields["PickupStart"] = pickupStart
     if pickupEnd is not None:
         updateFields["endTime"] = pickupEnd
     if status is not None:
@@ -262,3 +262,20 @@ async def update_listing(
     if apiResponse.get("status", 400) not in (200, 204):
         raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
     return {"status": "success", "message": f"Listing {listingID} updated successfully."}
+
+@app.post("/api/listings/{listingID}/reserve")
+async def reserve_listing(listingID: str, amount: int = Form(1)):
+    """Backend endpoint to handle secure, transactional reservations"""
+    apiResponse = firebaseHelper.add_reservation(listingID, amount)
+    
+    status = apiResponse.get("status", 400)
+    if status not in (200, 204):
+        raise HTTPException(
+            status_code=status,
+            detail=apiResponse.get("message", "Reservation failed")
+        )
+        
+    return {
+        "status": "success", 
+        "remaining_spots": apiResponse.get("message")
+    }

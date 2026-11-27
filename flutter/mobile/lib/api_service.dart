@@ -27,8 +27,8 @@ class ApiService {
     request.fields['foodName'] = foodName;
     request.fields['description'] = description;
     request.fields['quantity'] = quantity.toString();
-    request.fields['pickupStart'] = pickupStart.toIso8601String();
-    request.fields['pickupEnd'] = pickupEnd.toIso8601String();
+    request.fields['pickupStart'] = pickupStart.toUtc().toIso8601String();
+    request.fields['pickupEnd'] = pickupEnd.toUtc().toIso8601String();
 
     request.fields['createdAt'] = DateTime.now().toUtc().toIso8601String();
     request.fields['location'] = location;
@@ -139,6 +139,30 @@ static Future<Map<String, dynamic>> updateListing({
         print('Error deleting listing: $e');
         rethrow;
       }
+  }
+
+  static Future<Map<String, dynamic>> reserveListing({
+    required String listingId,
+    int amount = 1,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/listings/$listingId/reserve');
+
+    try {
+      // Backend expects Form data for 'amount'
+      final response = await http.post(
+        url,
+        body: {'amount': amount.toString()},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to reserve listing: ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Error reserving listing: $e');
+      rethrow;
+    }
   }
 
 }

@@ -80,7 +80,7 @@ class _MainDashboardState extends State<MainDashboard> {
               currentUser: widget.currentUser,
               onPostCreated: (newPost) {
                 setState(() {
-                  globalPostsList.add(newPost);
+                  //globalPostsList.add(newPost);
                   _selectedIndex = 0;
                 });
               },
