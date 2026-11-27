@@ -1,8 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'main.dart';
 import 'api_service.dart';
 
@@ -21,10 +27,15 @@ class CreatePostPage extends StatefulWidget {
 }
 
 class _CreatePostPageState extends State<CreatePostPage> {
+  static const MethodChannel _nativeGeocoder = MethodChannel(
+    'com.example.mobile/native_geocoder',
+  );
+
   var foodTypeController = TextEditingController();
   var descController = TextEditingController();
   var slotsController = TextEditingController();
   var locationController = TextEditingController();
+  final FocusNode locationFocusNode = FocusNode();
 
   DateTime selectedDate = DateTime.now();
   TimeOfDay startTime = const TimeOfDay(hour: 12, minute: 0);
@@ -37,19 +48,96 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
 
   bool isPublishing = false;
+  bool isFindingLocation = false;
+  int _addressSearchGeneration = 0;
+
+  Future<Iterable<String>> _addressOptionsBuilder(
+    TextEditingValue value,
+  ) async {
+    final query = value.text.trim();
+    final requestGeneration = ++_addressSearchGeneration;
+    if (query.length < 3) return const [];
+
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted || requestGeneration != _addressSearchGeneration) {
+      return const [];
+    }
+
+    try {
+      final suggestions = await _nativeGeocoder.invokeListMethod<String>(
+        'searchAddresses',
+        {'query': query},
+      );
+      if (!mounted || requestGeneration != _addressSearchGeneration) {
+        return const [];
+      }
+      return suggestions ?? const [];
+    } catch (error) {
+      if (mounted && requestGeneration == _addressSearchGeneration) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to search nearby addresses: $error')),
+        );
+      }
+      return const [];
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() {
+      isFindingLocation = true;
+    });
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('Turn on location services and try again.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        throw Exception('Location permission was denied.');
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+          'Location permission is disabled. Enable it in your device settings.',
+        );
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final address = await _nativeGeocoder.invokeMethod<String>(
+        'reverseGeocode',
+        {'latitude': position.latitude, 'longitude': position.longitude},
+      );
+      if (address == null || address.trim().isEmpty) {
+        throw Exception('Could not find a street address at this location.');
+      }
+      if (!mounted) return;
+      locationController.text = address.trim();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to get your address: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          isFindingLocation = false;
+        });
+      }
+    }
+  }
 
   DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      time.hour,
-      time.minute,
-    );
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   // NEW: Save the food listing to Firestore
-  
+
   // Publish to Firebase and update the existing local list
   Future<void> _publishPost() async {
     if (isPublishing) return;
@@ -57,7 +145,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (!postFormKey.currentState!.validate()) {
       return;
     }
-
 
     if (int.parse(slotsController.text) <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -68,17 +155,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
       return;
     }
 
-    final pickupStart =
-        _combineDateAndTime(selectedDate, startTime);
+    final pickupStart = _combineDateAndTime(selectedDate, startTime);
 
-    final pickupEnd =
-        _combineDateAndTime(selectedDate, endTime);
+    final pickupEnd = _combineDateAndTime(selectedDate, endTime);
 
     if (!pickupEnd.isAfter(pickupStart)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End time must be after start time.'),
-        ),
+        const SnackBar(content: Text('End time must be after start time.')),
       );
       return;
     }
@@ -99,24 +182,25 @@ class _CreatePostPageState extends State<CreatePostPage> {
           .where('ownerID', isEqualTo: user.uid)
           .limit(1)
           .get();
-    
 
       if (orgQuery.docs.isEmpty) {
         throw Exception('No organization found for the current user.');
       }
 
       if (orgQuery.docs.first.data()['status'] != 'active') {
-        throw Exception('Your organization has not beenapproved to create posts.');
+        throw Exception(
+          'Your organization has not beenapproved to create posts.',
+        );
       }
 
       final organizationID = orgQuery.docs.first.id;
-      
+
       // Temporarily disabled
-      if (pickedImage == null) { 
+      if (pickedImage == null) {
         throw Exception('Please select an image for the post.');
       }
 
-      final response = await ApiService.createPost ( 
+      final response = await ApiService.createPost(
         foodName: foodTypeController.text.trim(),
         description: descController.text.trim(),
         quantity: int.parse(slotsController.text),
@@ -127,13 +211,17 @@ class _CreatePostPageState extends State<CreatePostPage> {
         imageFile: pickedImage!, // should be pickedImage! but temporarily allowing null for testing purposes
       );
 
-
-      final postID = (response['listingID'] ??
-                      response['listingId'] ??
-                      response['id'])?.toString();
+      final postID =
+          (response['listingID'] ?? response['listingId'] ?? response['id'])
+              ?.toString();
 
       if (postID == null || postID.isEmpty) {
         throw Exception('API response did not contain a listing ID.');
+      }
+      final latitude = (response['lat'] as num?)?.toDouble();
+      final longitude = (response['lng'] as num?)?.toDouble();
+      if (latitude == null || longitude == null) {
+        throw Exception('API response did not contain listing coordinates.');
       }
 
       if (!mounted) return;
@@ -145,6 +233,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
         foodType: foodTypeController.text,
         description: descController.text,
         imageFile: pickedImage,
+        location: locationController.text.trim(),
+        latitude: latitude,
+        longitude: longitude,
         date: selectedDate,
         startTime: startTime,
         endTime: endTime,
@@ -155,11 +246,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to publish post: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Unable to publish post: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -168,6 +256,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
     }
   }
+
   // Function to pick an image from gallery
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -226,6 +315,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     descController.dispose();
     slotsController.dispose();
     locationController.dispose();
+    locationFocusNode.dispose();
     super.dispose();
   }
 
@@ -338,19 +428,78 @@ class _CreatePostPageState extends State<CreatePostPage> {
             ),
 
             const SizedBox(height: 15),
-            TextFormField(
-              controller: locationController,
-              decoration: const InputDecoration(
-                labelText: "Pickup Location",
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) {
-                if (v == null || v.trim().isEmpty) {
-                  return "Pickup loaction is required";
-                }
-
-                return null;
+            RawAutocomplete<String>(
+              textEditingController: locationController,
+              focusNode: locationFocusNode,
+              optionsBuilder: _addressOptionsBuilder,
+              onSelected: (address) {
+                locationController.text = address;
               },
+              fieldViewBuilder:
+                  (context, controller, focusNode, onFieldSubmitted) {
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: "Pickup Location",
+                        helperText: "Address suggestions are centered on Stillwater, OK",
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return "Pickup location is required";
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (_) => onFieldSubmitted(),
+                    );
+                  },
+              optionsViewBuilder: (context, onSelected, options) {
+                final suggestions = options.toList();
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 240),
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: suggestions.length,
+                        itemBuilder: (context, index) {
+                          final address = suggestions[index];
+                          return ListTile(
+                            leading: const Icon(Icons.location_on_outlined),
+                            dense: true,
+                            title: Text(address),
+                            onTap: () => onSelected(address),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: isFindingLocation ? null : _useCurrentLocation,
+                icon: isFindingLocation
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                label: Text(
+                  isFindingLocation
+                      ? "Finding address..."
+                      : "Use current location",
+                ),
+              ),
             ),
 
             const SizedBox(height: 20),
@@ -371,7 +520,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
               style: OutlinedButton.styleFrom(
                 alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 16,
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -386,7 +538,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     label: Text("Start: ${startTime.format(context)}"),
                     style: OutlinedButton.styleFrom(
                       alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -398,7 +553,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     label: Text("End: ${endTime.format(context)}"),
                     style: OutlinedButton.styleFrom(
                       alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -414,26 +572,20 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
 
               child: isPublishing
-              ? const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox (
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator (
-                      strokeWidth: 2,
-                    ),
-                  ),
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
 
-                  SizedBox (width: 10),
-                  Text ("Publishing...", style: TextStyle(fontSize: 16),
-                  ),
-                ],
-              )
-
-              : const Text (
-                "Publish Post", style: TextStyle(fontSize: 16),
-              ),
+                        SizedBox(width: 10),
+                        Text("Publishing...", style: TextStyle(fontSize: 16)),
+                      ],
+                    )
+                  : const Text("Publish Post", style: TextStyle(fontSize: 16)),
             ),
           ],
         ),

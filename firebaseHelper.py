@@ -97,7 +97,7 @@ def generate_ListingID (organizationID: int, location: str, startTime: str, food
     return str(organizationID) + location + startTime + foodType
 
 def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: str, 
-                isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, 
+                isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, foodConfidence: int = 0, allergensList: Optional[List[str]] = None, 
                 constraintsList: Optional[List[str]] = None, ai_description: str = "N/A", lat: Optional[float] = None, lng: Optional[float] = None, reservedBy: Optional[str] = None) -> dict:
     """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
     
@@ -149,6 +149,7 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
                 "safe": isSafe,
                 "freshness": freshnessScore,
                 "expiration": expirationDays,
+                "food_confidence": foodConfidence,
                 "allergens": allergensList or [],
                 "constraints": constraintsList or [],
                 "ai_description": ai_description,
@@ -369,6 +370,7 @@ class Listing:
     isSafe: bool = True
     freshnessScore: int = 10
     expirationDays: int = 0
+    foodConfidence: int = 0
     allergensList: List[str] = field(default_factory = list)
     constraintsList: List[str] = field(default_factory = list)
     ai_description: str = "N/A"
@@ -406,6 +408,7 @@ def create_listing(listing:Listing) -> dict:
         isSafe = listing.isSafe,
         freshnessScore = listing.freshnessScore,
         expirationDays = listing.expirationDays,
+        foodConfidence = listing.foodConfidence,
         allergensList = listing.allergensList,
         constraintsList = listing.constraintsList,
         ai_description = listing.ai_description,

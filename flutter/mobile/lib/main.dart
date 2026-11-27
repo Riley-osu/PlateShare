@@ -20,9 +20,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase using platform-specific options
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const MyApp());
 }
@@ -35,6 +33,9 @@ class FoodPost {
   String description;
   File? imageFile;
   String? imageUrl;
+  String location;
+  double? latitude;
+  double? longitude;
   DateTime date;
   TimeOfDay startTime;
   TimeOfDay endTime;
@@ -47,15 +48,14 @@ class FoodPost {
     required this.description,
     this.imageFile,
     this.imageUrl,
+    required this.location,
+    this.latitude,
+    this.longitude,
     required this.date,
     required this.startTime,
     required this.endTime,
     required this.remainingSlots,
   });
-
-  double? get latitude => null;
-
-  double? get longitude => null;
 }
 
 // Root application widget configured with app themes and starting screen
@@ -99,7 +99,12 @@ class LandingScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.school, size: 90, color: Colors.white),
+              Image.asset(
+                'assets/brand/plateshare_logo.png',
+                width: 140,
+                height: 150,
+                fit: BoxFit.contain,
+              ),
               const SizedBox(height: 20),
               const Text(
                 "Welcome to PlateShare",
@@ -138,8 +143,10 @@ class LandingScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const Text("Log In",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "Log In",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
               const SizedBox(height: 15),
@@ -165,8 +172,10 @@ class LandingScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const Text("Sign Up",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "Sign Up",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -213,7 +222,7 @@ class _AuthScreenState extends State<AuthScreen> {
     o1.dispose();
     super.dispose();
   }
-  
+
   // Handles form validation, Firebase authentication (signup/signin), status verification, and dashboard navigation
   Future<void> handleAuthentication() async {
     // Hide keyboard
@@ -234,36 +243,32 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       // Execute sign up or sign in based on the current page mode
-      
-if (isSignUpPage) {
-  await authService.value.createAccount(
-    email: userEmail,
-    password: userPass,
-    isOrganization: isOrgSwitch,
-    orgName: isOrgSwitch ? o1.text.trim() : null,
-  );
 
-  if (!mounted) return;
+      if (isSignUpPage) {
+        await authService.value.createAccount(
+          email: userEmail,
+          password: userPass,
+          isOrganization: isOrgSwitch,
+          orgName: isOrgSwitch ? o1.text.trim() : null,
+        );
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text(
-        'Account created! Please verify your email before logging in.',
-      ),
-    ),
-  );
+        if (!mounted) return;
 
-  return;
-} else {
-  await authService.value.signIn(
-    email: userEmail,
-    password: userPass,
-  );
-}
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Account created! Please verify your email before logging in.',
+            ),
+          ),
+        );
 
-// Only retrieve profile after successful login
-final loggedUser = await authService.value.getUserData();
+        return;
+      } else {
+        await authService.value.signIn(email: userEmail, password: userPass);
+      }
 
+      // Only retrieve profile after successful login
+      final loggedUser = await authService.value.getUserData();
 
       // Fetch user profile data from backend
       //final loggedUser = await authService.value.getUserData();
@@ -271,7 +276,6 @@ final loggedUser = await authService.value.getUserData();
       if (loggedUser == null) {
         throw Exception("User data not found after authentication.");
       }
-      
 
       if (loggedUser.status != 'active') {
         await authService.value.signOut();
@@ -285,13 +289,12 @@ final loggedUser = await authService.value.getUserData();
         context,
         MaterialPageRoute(
           builder: (context) => MainDashboard(
-            currentUser: loggedUser, 
+            currentUser: loggedUser,
             initialIsAdmin: loggedUser.isAdmin,
           ),
         ),
         (route) => false,
       );
- 
     } on FirebaseAuthException catch (e) {
       // Handle specific Firebase authentication errors and show user-friendly messages
       if (!mounted) return;
@@ -300,27 +303,25 @@ final loggedUser = await authService.value.getUserData();
       if (e.code == 'email-already-in-use') {
         message = "This email is already in use.";
       } else if (e.code == 'weak-password') {
-        message = "Password is too weak.";   
+        message = "Password is too weak.";
       } else if (e.code == 'invalid-email') {
         message = "Invalid email address.";
-      } else if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found') {
+      } else if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
         message = "Incorrect email or password.";
       } else if (e.code == 'network-request-failed') {
         message = "Network error. Please check your internet connection.";
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       // Handle any other unexpected errors
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       // Reset loading indicator state
       if (mounted) {
@@ -328,12 +329,17 @@ final loggedUser = await authService.value.getUserData();
           isLoading = false;
         });
       }
-    } 
+    }
+  }
+
+  Future<void> handleForgotPassword() async {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Yippee!!')));
   }
 
   @override
   Widget build(BuildContext context) {
-    final pageTitle = isSignUpPage == true? "Sign Up" : "Log In";
+    final pageTitle = isSignUpPage == true ? "Sign Up" : "Log In";
 
     return Scaffold(
       appBar: AppBar(title: Text(pageTitle)),
@@ -349,7 +355,10 @@ final loggedUser = await authService.value.getUserData();
                 const SizedBox(height: 20),
                 Text(
                   pageTitle,
-                  style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 30),
@@ -395,6 +404,14 @@ final loggedUser = await authService.value.getUserData();
                     return null;
                   },
                 ),
+                if (!isSignUpPage)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: handleForgotPassword,
+                      child: const Text('Forgot Password?'),
+                    ),
+                  ),
                 const SizedBox(height: 20),
 
                 // Organization Sign-in toggle & input fields (visible only during sign up)
@@ -420,14 +437,15 @@ final loggedUser = await authService.value.getUserData();
                         prefixIcon: Icon(Icons.business),
                       ),
                       validator: (value) {
-                        if (isOrgSwitch && (value == null || value.trim().isEmpty)) {
+                        if (isOrgSwitch &&
+                            (value == null || value.trim().isEmpty)) {
                           return "Organization name is required to post";
                         }
                         return null;
                       },
                     ),
                   ],
-                ],  
+                ],
                 const SizedBox(height: 30),
 
                 // Submit / Authentication Action Button
@@ -438,10 +456,7 @@ final loggedUser = await authService.value.getUserData();
                   onPressed: isLoading ? null : handleAuthentication,
                   child: isLoading
                       ? const CircularProgressIndicator()
-                      : Text(
-                          pageTitle,
-                          style: const TextStyle(fontSize: 18),
-                        ),
+                      : Text(pageTitle, style: const TextStyle(fontSize: 18)),
                 ),
               ],
             ),

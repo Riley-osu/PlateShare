@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'main.dart';
 import 'auth_service.dart';
 import 'food_list_page.dart';
@@ -23,7 +24,8 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   int _selectedIndex = 0;
-  
+  String? _selectedListingId;
+
   final TextEditingController searchController = TextEditingController();
 
   @override
@@ -42,13 +44,12 @@ class _MainDashboardState extends State<MainDashboard> {
       MaterialPageRoute(builder: (_) => const LandingScreen()),
       (route) => false,
     );
-
   }
 
   @override
   Widget build(BuildContext context) {
     final isAdmin = widget.currentUser.admin;
-    
+
     String titleText = "Dashboard";
     if (_selectedIndex == 0) titleText = "Food List View";
     if (_selectedIndex == 1) titleText = "Map View";
@@ -64,16 +65,27 @@ class _MainDashboardState extends State<MainDashboard> {
             icon: const Icon(Icons.logout),
             tooltip: "Logout",
             onPressed: logout,
-          )
+          ),
         ],
       ),
       body: Builder(
         builder: (context) {
           if (_selectedIndex == 0) {
-            return FoodListPage(posts: globalPostsList, currentUser: widget.currentUser);
+            return FoodListPage(
+              posts: globalPostsList,
+              currentUser: widget.currentUser,
+              initialListingId: _selectedListingId,
+            );
           }
           if (_selectedIndex == 1) {
-            return const MapPage();
+            return MapPage(
+              onListingSelected: (listingId) {
+                setState(() {
+                  _selectedListingId = listingId;
+                  _selectedIndex = 0;
+                });
+              },
+            );
           }
           if (_selectedIndex == 2) {
             return CreatePostPage(
@@ -97,9 +109,8 @@ class _MainDashboardState extends State<MainDashboard> {
               registeredUsersList: registeredUsersList,
             );
           }
-          return const Center(child: Text("Page not found"),
-          );
-        }            
+          return const Center(child: Text("Page not found"));
+        },
       ),
 
       bottomNavigationBar: BottomNavigationBar(
@@ -113,11 +124,13 @@ class _MainDashboardState extends State<MainDashboard> {
         selectedItemColor: Colors.orange.shade800,
         unselectedItemColor: Colors.grey,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.list), label: "List",),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map",),
-          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: "Post",),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Account",),
-          BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: "Admin",
+          BottomNavigationBarItem(icon: Icon(Icons.list), label: "List"),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Map"),
+          BottomNavigationBarItem(icon: Icon(Icons.add_box), label: "Post"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Account"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.admin_panel_settings),
+            label: "Admin",
           ),
         ],
       ),

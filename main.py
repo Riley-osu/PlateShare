@@ -128,6 +128,7 @@ async def create_listing(
             isSafe = aiSafe,
             freshnessScore = aiFreshness,
             expirationDays = aiExpiration,
+            foodConfidence = aiConfidence,
             allergensList = aiAllergens,
             constraintsList = aiConstraints,
             aiDescription = aiDescription,
@@ -147,10 +148,13 @@ async def create_listing(
     return{
         "status": "success",
         "listingID": apiResponse.get("message"),
+        "lat": lat,
+        "lng": lng,
         "aiResponse": {
             "safe": aiSafe,
             "freshness": aiFreshness,
             "expiration": aiExpiration,
+            "confidence": aiConfidence,
             "allergens": aiAllergens,
             "constraints": aiConstraints,
             "aiDescription": aiDescription
@@ -246,6 +250,7 @@ async def update_listing(
                 "safe": aiSafe,
                 "freshness": aiFreshness,
                 "expiration": aiExpiration,
+                "food_confidence": aiConfidence,
                 "allergens": aiAllergens,
                 "constraints": aiConstraints
             }
