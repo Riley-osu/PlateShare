@@ -5,6 +5,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 import math
 from typing import List, Optional, Any
+from fastapi import HTTPException
 
 def init_firestore():
     if not firebase_admin._apps:
@@ -95,9 +96,9 @@ def generate_ListingID (organizationID: int, location: str, startTime: str, food
     """Get the ListingID for any listing, given its organization, location and start time."""
     return str(organizationID) + location + startTime + foodType
 
-def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: Optional[str] = None, 
+def add_listing(foodType:str, description:str, quantity:int, location:str, organizationID:int, startTime:str, endTime:str, imageURL: str, 
                 isSafe: bool = True, freshnessScore: int = 10, expirationDays: int = 0, allergensList: Optional[List[str]] = None, 
-                constraintsList: Optional[List[str]] = None, lat: Optional[float] = None, lng: Optional[float] = None, reservedBy: Optional[str] = None) -> dict:
+                constraintsList: Optional[List[str]] = None, ai_description: str = "N/A", lat: Optional[float] = None, lng: Optional[float] = None, reservedBy: Optional[str] = None) -> dict:
     """Add a new listing to the database. Pass time as: datetime(...).isoformat()"""
     
     httpsReturn = {"status": 200, "message": "OK"}
@@ -149,7 +150,8 @@ def add_listing(foodType:str, description:str, quantity:int, location:str, organ
                 "freshness": freshnessScore,
                 "expiration": expirationDays,
                 "allergens": allergensList or [],
-                "constraints": constraintsList or []
+                "constraints": constraintsList or [],
+                "ai_description": ai_description,
             }
         })
         return _response(200,listingID)
@@ -360,7 +362,7 @@ class Listing:
     organizationID: int
     startTime: str
     endTime: str
-    imageURL: Optional[str] = None
+    imageURL: str
     lat: Optional[float] = None
     lng: Optional[float] = None
     reservedBy: Optional[str] = None
@@ -371,6 +373,7 @@ class Listing:
     expirationDays: int = 0
     allergensList: List[str] = field(default_factory = list)
     constraintsList: List[str] = field(default_factory = list)
+    ai_description: str = "N/A"
     
     def __post_init__(self):
         if self.maxReservations < 1:
@@ -407,5 +410,6 @@ def create_listing(listing:Listing) -> dict:
         expirationDays = listing.expirationDays,
         allergensList = listing.allergensList,
         constraintsList = listing.constraintsList,
+        ai_description = listing.ai_description,
         reservedBy = listing.reservedBy
     )
