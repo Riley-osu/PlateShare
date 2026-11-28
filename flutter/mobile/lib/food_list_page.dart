@@ -87,10 +87,11 @@ class _FoodListPageState extends State<FoodListPage> {
         final data = snapshot.data();
 
         final quantity = data?['quantity'] as int? ?? 0;
-
-        final reservedBy = List<String>.from (
-          data?['reservedBy'] ?? [],
-        );
+        
+        final rawReservedBy = data?['reservedBy'];
+        final List<String> reservedBy = rawReservedBy is List ? List<String>.from(rawReservedBy):
+                (rawReservedBy is String && rawReservedBy.isNotEmpty)
+                ? [rawReservedBy]:[];
 
         if (reservedBy.contains(user.uid)) {
           throw Exception('You have already reserved this food listing.');

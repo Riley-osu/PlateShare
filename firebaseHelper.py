@@ -264,17 +264,19 @@ def _time_until(listingID:str, field:str) -> dict:
         # minutes = max(math.cell(delta.total_seconds() / 60),0)
         # return _response(200,minutes)
         docRef = db.collection("listings").document(listingID).get()
-        if not docRef.exists:
+
+        if not docRef.exists: 
             return _response(404, "Listing not found")
 
-        targetTime = str(docRef.to_dict().get(field))
-        if isinstance(targetTime, str):
-            parsed_res = parse_iso_datetime(targetTime)
-            if parsed_res["status"] != 200:
-                return parsed_res
-            targetTime = parse_iso_datetime(targetTime)
-
-        timeDelta = targetTime["message"] - datetime.now(timezone.utc)
+        targetTime = docRef.to_dict().get(field)
+        if targetTime is None:
+            return _response(400, f"Field '{field}' is missing from the listing")
+        
+        parsed_res = parse_iso_datetime(str(targetTime))
+        if parsed_res["status"] != 200:
+            return parsed_res
+        
+        timeDelta = parsed_res["message"] - datetime.now(timezone.utc)
         mins = max(math.ceil(timeDelta.total_seconds() / 60), 0)
         return _response(200, mins)
     except Exception as e:
@@ -376,11 +378,24 @@ class Listing:
     def __post_init__(self):
         if self.maxReservations < 1:
             raise ValueError("maxReservations must be at least 1")
-        if parse_iso_datetime(self.endTime)["message"] <= parse_iso_datetime(self.startTime)["message"]:
+            
+        start_res = parse_iso_datetime(self.startTime)
+        end_res = parse_iso_datetime(self.endTime)
+        
+        # Fix: Check for parsing failures before attempting date comparisons
+        if start_res["status"] != 200:
+            raise ValueError(f"Invalid startTime format: {start_res['message']}")
+        if end_res["status"] != 200:
+            raise ValueError(f"Invalid endTime format: {end_res['message']}")
+            
+        start_dt = start_res["message"]
+        end_dt = end_res["message"]
+
+        if end_dt <= start_dt:
             raise ValueError("endTime must be after startTime")
 
         monthFromNow = datetime.now(timezone.utc) + timedelta(days=30)
-        if parse_iso_datetime(self.endTime)["message"] > monthFromNow: 
+        if end_dt > monthFromNow: 
             raise ValueError("endTime set too far into the future")
         
     @property

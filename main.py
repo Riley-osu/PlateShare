@@ -34,22 +34,20 @@ def test_database_connection():
         return {"status":404, "message":str(e)}
 
 @app.get("/test-message-send")
-def test_messages():
+def test_message_send(): # FIXED: Renamed to avoid duplicate function names
     try:
         returnCode = firebaseHelper.add_message("TestID67Student Union2026-10-23T15:25:00.000Z", True, "firebase005", "testing messages")
         return returnCode
     except Exception as e:
         return {"status":404, "message":str(e)}
 
-
 @app.get("/test-message-get")
-def test_messages():
+def test_message_get(): # FIXED: Renamed to avoid duplicate function names
     try:
         returnCode = firebaseHelper.get_listing_message_for_user("TestID67Student Union2026-10-23T15:25:00.000Z", "firebase005")
         return returnCode
     except Exception as e:
         return {"status":404, "message":str(e)}
-
 
 @app.post("/api/listings")
 async def create_listing(
@@ -68,15 +66,16 @@ async def create_listing(
     status: str = Form("available")
 
 ):
-
-
-    # createdAt = datetime.now(timezone.utc).isoformat()
-
+    print("test")
     """Geocodes the provided address"""
     try:
         lat,lng = await geocodeAddress(location)
     except geocodeError as e:
         raise HTTPException(status_code = 400, detail = str(e))
+
+    # FIXED: Ensure image exists before attempting to read it
+    if image is None:
+        raise HTTPException(status_code=400, detail="Image file is missing.")
 
     imageBytes = await image.read()
     if not imageBytes:
@@ -105,7 +104,7 @@ async def create_listing(
         # print(e)
         pass
 
-    if aiConfidence >= 80:
+    if int(aiConfidence) >= 80:
         # Saves image as B64 URL that Firestore can store
         base64Str = base64.b64encode(imageBytes).decode("utf-8")
         imageURL = f"data:image/jpeg;base64,{base64Str}"
@@ -130,19 +129,24 @@ async def create_listing(
             expirationDays = aiExpiration,
             allergensList = aiAllergens,
             constraintsList = aiConstraints,
-            aiDescription = aiDescription,
+            ai_description = aiDescription,
             reservedBy = ""
         )
     except Exception as e:
-        raise e
+        raise HTTPException(status_code=400, detail=str(e))
 
-    # Commit to Firestore
-    apiResponse = firebaseHelper.create_listing(newListing)
-    if apiResponse.get("status") != 200:
-        raise HTTPException(
-            status_code = apiResponse.get("status", 400),
-            detail = apiResponse.get("message")      
-        )
+    # FIXED: Wrapped Firestore commit in try/except to catch 1MB limit or network crashes
+    try:
+        apiResponse = firebaseHelper.create_listing(newListing)
+        if apiResponse.get("status") != 200:
+            raise HTTPException(
+                status_code = apiResponse.get("status", 400),
+                detail = apiResponse.get("message")      
+            )
+    except HTTPException:
+        raise # Allows our manual HTTPExceptions to pass through cleanly
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database commit error: {str(e)}")
 
     return{
         "status": "success",
@@ -191,7 +195,7 @@ async def update_listing(
     if description is not None:
         updateFields["description"] = description
     if quantity is not None:
-        updateFields["maxReservations"] = quantity
+        updateFields["quanitity"] = quantity
     if location is not None:
         updateFields["location"] = location
         try:
@@ -201,7 +205,7 @@ async def update_listing(
         except Exception as e:
             raise HTTPException(status_code = 400, detail = str(e))
     if pickupStart is not None:
-        updateFields["startTime"] = pickupStart
+        updateFields["PickupStart"] = pickupStart
     if pickupEnd is not None:
         updateFields["endTime"] = pickupEnd
     if status is not None:
@@ -235,7 +239,8 @@ async def update_listing(
             except Exception:
                 pass
 
-            if aiConfidence >= 80:
+            
+            if int(aiConfidence) >= 80:
                 # Saves image as B64 URL that Firestore can store
                 base64Str = base64.b64encode(imageBytes).decode("utf-8")
                 updateFields["imageURL"] = f"data:image/jpeg;base64,{base64Str}"
@@ -256,10 +261,38 @@ async def update_listing(
     if not updateFields:
         raise HTTPException(status_code = 400, detail = "No fields were provided.")
 
-    apiResponse = firebaseHelper.update_listing(listingID, updateFields)
-    if apiResponse.get("status", 400) not in (200, 204):
-        raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
+    # FIXED: Added try/except to catch database crashes during PATCH
+    try:
+        apiResponse = firebaseHelper.update_listing(listingID, updateFields)
+        if apiResponse.get("status", 400) not in (200, 204):
+            raise HTTPException(status_code = apiResponse.get("status", 400), detail = apiResponse.get("message", "Update failed!"))
+    except HTTPException:
+        raise
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=f"Database update error: {str(e)}")
+        
     return {"status": "success", "message": f"Listing {listingID} updated successfully."}
+
+@app.post("/api/listings/{listingID}/reserve")
+async def reserve_listing(listingID: str, amount: int = Form(1)):
+    """Backend endpoint to handle secure, transactional reservations"""
+    try:
+        apiResponse = firebaseHelper.add_reservation(listingID, amount)
+        status = apiResponse.get("status", 400)
+        if status not in (200, 204):
+            raise HTTPException(
+                status_code=status,
+                detail=apiResponse.get("message", "Reservation failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        
+    return {
+        "status": "success", 
+        "remaining_spots": apiResponse.get("message")
+    }
     
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
