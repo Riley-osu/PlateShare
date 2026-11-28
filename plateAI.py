@@ -71,14 +71,19 @@ def analyze_food(image:bytes) -> dict:
             json = message,
             timeout = 45
         )
-        # Checks HTTP status code for API response and throws exception if failed
         response.raise_for_status()
-    # Throws exception
+        # Fix: Only attempt to parse JSON if the request actually succeeded
+        content = response.json().get("message", {}).get("content", "")
     except Exception as e:
-        print(e)
-
-    # Safely pulls from response without crashing from missing key
-    content = response.json().get("message", {}).get("content", "")
+        print(f"AI Analysis Failed: {e}")
+        # Fail safely with empty content to trigger the fallback logic
+        content = ""
+        
+    if not content:
+        return {
+            "food_confidence": 0, "safe": False, "freshness": 1, 
+            "expiration": 0, "allergens": [], "constraints": []
+        }
 
     # Cleans up response if it's unnecessarily wrapped and labeled
     if "```" in content:

@@ -378,11 +378,24 @@ class Listing:
     def __post_init__(self):
         if self.maxReservations < 1:
             raise ValueError("maxReservations must be at least 1")
-        if parse_iso_datetime(self.endTime)["message"] <= parse_iso_datetime(self.startTime)["message"]:
+            
+        start_res = parse_iso_datetime(self.startTime)
+        end_res = parse_iso_datetime(self.endTime)
+        
+        # Fix: Check for parsing failures before attempting date comparisons
+        if start_res["status"] != 200:
+            raise ValueError(f"Invalid startTime format: {start_res['message']}")
+        if end_res["status"] != 200:
+            raise ValueError(f"Invalid endTime format: {end_res['message']}")
+            
+        start_dt = start_res["message"]
+        end_dt = end_res["message"]
+
+        if end_dt <= start_dt:
             raise ValueError("endTime must be after startTime")
 
         monthFromNow = datetime.now(timezone.utc) + timedelta(days=30)
-        if parse_iso_datetime(self.endTime)["message"] > monthFromNow: 
+        if end_dt > monthFromNow: 
             raise ValueError("endTime set too far into the future")
         
     @property
