@@ -129,7 +129,7 @@ async def create_listing(
             expirationDays = aiExpiration,
             allergensList = aiAllergens,
             constraintsList = aiConstraints,
-            aiDescription = aiDescription,
+            ai_Description = aiDescription,
             reservedBy = ""
         )
     except Exception as e:
